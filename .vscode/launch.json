@@ -1,0 +1,32 @@
+﻿{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "GUI (WPF)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/src/LocalTranscriber.Gui/LocalTranscriber.Gui.csproj"
+    },
+    {
+      "name": "Service (console)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/src/LocalTranscriber.Service/LocalTranscriber.Service.csproj"
+    },
+    {
+      "name": "MCP (stdio, smoke test)",
+      "type": "dotnet",
+      "request": "launch",
+      "projectPath": "${workspaceFolder}/src/LocalTranscriber.Mcp/LocalTranscriber.Mcp.csproj"
+    },
+    {
+      "name": "Engine: selftest (Python)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "transcriber_engine",
+      "args": ["--selftest"],
+      "cwd": "${workspaceFolder}/engine",
+      "python": "${workspaceFolder}/engine/.venv/Scripts/python.exe"
+    }
+  ]
+}

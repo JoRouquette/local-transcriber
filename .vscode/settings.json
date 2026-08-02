@@ -1,0 +1,10 @@
+﻿{
+  "dotnet.defaultSolution": "LocalTranscriber.sln",
+  "python.defaultInterpreterPath": "${workspaceFolder}\\engine\\.venv\\Scripts\\python.exe",
+  "python.terminal.activateEnvironment": true,
+  "files.exclude": {
+    "**/bin": true,
+    "**/obj": true,
+    "**/__pycache__": true
+  }
+}

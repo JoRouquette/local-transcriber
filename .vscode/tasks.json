@@ -1,0 +1,35 @@
+﻿{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "LocalTranscriber.sln"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "restore",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["restore", "LocalTranscriber.sln"],
+      "problemMatcher": []
+    },
+    {
+      "label": "engine: build (CPU, PyInstaller)",
+      "type": "shell",
+      "command": "pwsh",
+      "args": ["-File", "build/build-engine.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "engine: selftest",
+      "type": "shell",
+      "command": "${workspaceFolder}/engine/.venv/Scripts/python.exe",
+      "args": ["-m", "transcriber_engine", "--selftest"],
+      "options": { "cwd": "${workspaceFolder}/engine" },
+      "problemMatcher": []
+    }
+  ]
+}
