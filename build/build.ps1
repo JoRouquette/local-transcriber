@@ -13,7 +13,8 @@
 param(
     [string]$Version = "0.1.0",
     [switch]$Cuda,
-    [switch]$SkipEngine
+    [switch]$SkipEngine,
+    [string]$ReleaseNotes
 )
 
 $ErrorActionPreference = "Stop"
@@ -48,13 +49,19 @@ Write-Host "==> Packaging Velopack" -ForegroundColor Cyan
 # Necessite : dotnet tool install -g vpk
 # Velopack cree par defaut UN raccourci Menu Demarrer (pas de raccourci Bureau) = choix voulu.
 $icon = Join-Path $root "src\LocalTranscriber.Gui\Assets\app.ico"
-vpk pack `
-    --packId "LocalTranscriber" `
-    --packTitle "LocalTranscriber" `
-    --packVersion $Version `
-    --packDir $publish `
-    --mainExe "LocalTranscriber.exe" `
-    --icon $icon `
-    --outputDir $releases
+$packArgs = @(
+    "pack",
+    "--packId", "LocalTranscriber",
+    "--packTitle", "LocalTranscriber",
+    "--packVersion", $Version,
+    "--packDir", $publish,
+    "--mainExe", "LocalTranscriber.exe",
+    "--icon", $icon,
+    "--outputDir", $releases
+)
+if ($ReleaseNotes -and (Test-Path $ReleaseNotes)) {
+    $packArgs += @("--releaseNotes", (Resolve-Path $ReleaseNotes).Path)
+}
+vpk @packArgs
 
 Write-Host "OK -> installeur dans $releases" -ForegroundColor Green

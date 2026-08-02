@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Calculer la version (semantic-release)
+    runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.semantic.outputs.new_release_published }}
+      version: ${{ steps.semantic.outputs.new_release_version }}
+      notes: ${{ steps.semantic.outputs.new_release_notes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: semantic-release (dry-run = calcul de version uniquement)
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v4
+        with:
+          dry_run: true
+          semantic_version: 24
+          extra_plugins: |
+            @semantic-release/commit-analyzer
+            @semantic-release/release-notes-generator
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-release:
+    name: Build + publication de l'installeur (Velopack)
+    needs: version
+    if: needs.version.outputs.published == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Installer Velopack (vpk)
+        run: dotnet tool install -g vpk
+
+      - name: Ecrire les notes de version
+        shell: pwsh
+        env:
+          NOTES: ${{ needs.version.outputs.notes }}
+        run: $env:NOTES | Set-Content -Path notes.md -Encoding UTF8
+
+      - name: Build installeur (moteur gele + .NET + pack Velopack)
+        shell: pwsh
+        run: .\build\build.ps1 -Version ${{ needs.version.outputs.version }} -ReleaseNotes notes.md
+
+      - name: Publier la release GitHub + assets (auto-update Velopack)
+        shell: pwsh
+        run: |
+          vpk upload github `
+            --repoUrl https://github.com/JoRouquette/local-transcriber `
+            --token ${{ secrets.GITHUB_TOKEN }} `
+            --outputDir build/Releases `
+            --tag v${{ needs.version.outputs.version }} `
+            --releaseName "v${{ needs.version.outputs.version }}" `
+            --publish
