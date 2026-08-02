@@ -22,9 +22,10 @@ def _eprint(*args: object) -> None:
     print(*args, file=sys.stderr, flush=True)
 
 
-def _emit(result: EngineResult) -> int:
-    sys.stdout.write(json.dumps(result.to_dict(), ensure_ascii=False))
-    sys.stdout.flush()
+def _emit(result: EngineResult, out=None) -> int:
+    out = out if out is not None else sys.stdout
+    out.write(json.dumps(result.to_dict(), ensure_ascii=False))
+    out.flush()
     return 0 if result.status == "ok" else 1
 
 
@@ -102,18 +103,23 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
 
+    # whisperx / faster-whisper ecrivent des messages sur stdout ("No language...",
+    # "Detected language..."). On redirige stdout vers stderr pendant le traitement pour
+    # que SEUL le JSON de resultat sorte sur le vrai stdout (lu par le service .NET).
+    real_out = sys.stdout
+    sys.stdout = sys.stderr
     try:
         from . import pipeline
 
         _eprint(f"[engine] traitement de {req.audio_path}")
         result = pipeline.run(req, hf_token)
         _eprint(f"[engine] termine ({result.segment_count} segments, {result.speaker_count} locuteurs)")
-        return _emit(result)
+        return _emit(result, real_out)
     except Exception as e:  # noqa: BLE001
         import traceback
 
         _eprint(traceback.format_exc())
-        return _emit(EngineResult(status="error", audio_path=req.audio_path, error=str(e)))
+        return _emit(EngineResult(status="error", audio_path=req.audio_path, error=str(e)), real_out)
 
 
 if __name__ == "__main__":
