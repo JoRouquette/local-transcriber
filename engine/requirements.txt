@@ -1,25 +1,32 @@
 # Moteur de transcription/diarisation (gele ensuite avec PyInstaller).
 #
-# IMPORTANT : stack epinglee et testee sur Python 3.11 (whisperx 3.1 / pyannote 3.1).
-# Ne pas utiliser Python 3.13 : il force whisperx 3.8 / pyannote 4 (API differentes,
-# dependance torchcodec + DLL FFmpeg partagees). FFmpeg (executable) doit etre sur le PATH.
+# STACK EPINGLEE ET TESTEE (transcription FR validee de bout en bout) sur Python 3.11.
+# Ne pas utiliser Python 3.13 (whisperx/pyannote de pointe + torchcodec + DLL FFmpeg).
+# FFmpeg (executable) doit etre sur le PATH.
+#
+# Notes de compatibilite (durement acquises) :
+#   - whisperx 3.3.1 + faster-whisper 1.1.0 : signatures TranscriptionOptions alignees.
+#   - av 12 (faster-whisper 1.1) a un wheel Windows cp311 (av 11 n'en a pas -> compile MSVC).
+#   - torch 2.2.2 : evite torchcodec (tire par torchaudio >= 2.8).
+#   - nltk 3.8.1 : evite le finder "inisec" (nltk 3.9+) qui casse import whisperx.
+#   - speechbrain 1.1.0 (via pyannote 3.3) : ses lazy modules (k2_fsa, nlp) cassent
+#     inspect.stack() ; neutralise au runtime par transcriber_engine._compat.
 #
 # PyTorch s'installe en amont selon la cible (voir README / build-engine.ps1) :
 #   CPU      :  pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cpu
 #   GPU CUDA :  pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 
-whisperx==3.1.1
-pyannote.audio==3.1.1
-faster-whisper==1.0.3
-av>=12,<13
+whisperx==3.3.1
+pyannote.audio==3.3.2
+faster-whisper==1.1.0
 ctranslate2==4.4.0
-transformers>=4.19,<4.41
-# nltk 3.9+ embarque un "finder" (inisec) qui bloque les imports depuis le CWD et
-# casse `import whisperx` (via l'alignement). 3.8.1 = derniere version sans ce garde-fou.
-nltk==3.8.1
+av==12.3.0
+speechbrain==1.1.0
+transformers==4.40.2
+tokenizers==0.19.1
 python-dotenv>=1.0.1
 srt>=3.5.3
-numpy>=1.26,<2.0
+numpy==1.26.4
 soundfile>=0.12.1
 
 # Recherche semantique (sidecar d'embeddings) : e5-small multilingue

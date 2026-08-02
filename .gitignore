@@ -20,6 +20,9 @@ build/engine-dist/
 Releases/
 *.nupkg
 
+# Dossier de tests locaux (audios, sorties, logs)
+_test/
+
 # Local runtime data (models cache, DB, logs, generated configs)
 data/
 models-cache/

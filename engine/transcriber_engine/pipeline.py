@@ -45,6 +45,8 @@ def _speaker_spans(segments: list[dict[str, Any]]) -> dict[str, list[tuple[float
 
 
 def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
+    from . import _compat
+    _compat.apply_speechbrain_patch()  # avant tout chargement whisperx/pyannote
     import whisperx
 
     result = EngineResult(audio_path=req.audio_path, engine_version=__version__)

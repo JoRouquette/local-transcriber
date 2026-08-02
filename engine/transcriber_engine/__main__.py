@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--request est requis (ou utilisez --selftest).")
 
     try:
-        with open(args.request, "r", encoding="utf-8") as f:
+        with open(args.request, "r", encoding="utf-8-sig") as f:
             req = EngineRequest.from_dict(json.load(f))
     except Exception as e:  # noqa: BLE001
         return _emit(EngineResult(status="error", error=f"Requete illisible : {e}"))

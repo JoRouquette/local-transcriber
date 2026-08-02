@@ -25,6 +25,8 @@ class SpeakerIdentifier:
     """Encapsule le modele d'embedding et le catalogue de voix de reference."""
 
     def __init__(self, hf_token: Optional[str], device: str):
+        from . import _compat
+        _compat.apply_speechbrain_patch()
         from pyannote.audio import Inference, Model  # import tardif (lourd)
         import torch
 
