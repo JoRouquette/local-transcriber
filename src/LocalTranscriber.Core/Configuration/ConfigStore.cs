@@ -28,8 +28,25 @@ public static class ConfigStore
             ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonDefaults.Options) ?? new AppConfig()
             : new AppConfig();
 
+        MigrateLegacyUserPaths(config);
         ApplyLocalOverlay(config, path);
         return config;
+    }
+
+    /// <summary>
+    /// Bascule en memoire les anciens emplacements par utilisateur (%LOCALAPPDATA%) vers
+    /// %PROGRAMDATA% pour que la GUI (utilisateur) et le service (LocalSystem) partagent
+    /// les memes fichiers. Ne touche pas aux chemins personnalises par l'utilisateur.
+    /// </summary>
+    private static void MigrateLegacyUserPaths(AppConfig config)
+    {
+        static string Fix(string p) => string.IsNullOrWhiteSpace(p)
+            ? p
+            : p.Replace(@"%LOCALAPPDATA%\LocalTranscriber", @"%PROGRAMDATA%\LocalTranscriber",
+                        StringComparison.OrdinalIgnoreCase);
+
+        config.DataDir = Fix(config.DataDir);
+        config.ModelCacheDir = Fix(config.ModelCacheDir);
     }
 
     /// <summary>

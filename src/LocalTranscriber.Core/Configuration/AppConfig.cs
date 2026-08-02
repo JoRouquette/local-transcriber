@@ -74,8 +74,11 @@ public sealed class AppConfig
 {
     public string WatchRoot { get; set; } = "";
     public string OutputRoot { get; set; } = "";
-    public string ModelCacheDir { get; set; } = @"%LOCALAPPDATA%\LocalTranscriber\models";
-    public string DataDir { get; set; } = @"%LOCALAPPDATA%\LocalTranscriber\data";
+    // Emplacements machine-wide (%PROGRAMDATA%) : la GUI (utilisateur) et le service
+    // (LocalSystem) doivent resoudre EXACTEMENT les memes chemins. %LOCALAPPDATA% ne
+    // convient pas car il pointe vers le profil systeme cote service.
+    public string ModelCacheDir { get; set; } = @"%PROGRAMDATA%\LocalTranscriber\models";
+    public string DataDir { get; set; } = @"%PROGRAMDATA%\LocalTranscriber\data";
     public string EngineExecutable { get; set; } = @"engine\transcriber-engine.exe";
 
     /// <summary>Installer automatiquement les mises à jour (téléchargées au lancement, appliquées à la fermeture).</summary>

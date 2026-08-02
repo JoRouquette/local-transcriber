@@ -27,8 +27,10 @@ public sealed class EngineSetup
     {
         _appDir = appDir ?? AppContext.BaseDirectory;
         EngineSourceDir = Path.Combine(_appDir, "engine");
+        // Machine-wide (%PROGRAMDATA%) et non %LOCALAPPDATA% : le service LocalSystem doit
+        // trouver le meme environnement que celui installe par la GUI de l'utilisateur.
         EnvDir = envDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "LocalTranscriber", "engine-env");
     }
 

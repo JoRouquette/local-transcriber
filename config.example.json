@@ -1,8 +1,8 @@
 {
   "watch_root": "C:\\Transcriptions\\Inbox",
   "output_root": "C:\\Transcriptions\\Outputs",
-  "model_cache_dir": "%LOCALAPPDATA%\\LocalTranscriber\\models",
-  "data_dir": "%LOCALAPPDATA%\\LocalTranscriber\\data",
+  "model_cache_dir": "%PROGRAMDATA%\\LocalTranscriber\\models",
+  "data_dir": "%PROGRAMDATA%\\LocalTranscriber\\data",
   "engine_executable": "engine\\transcriber-engine.exe",
   "auto_install_updates": true,
   "hf_token": "",
