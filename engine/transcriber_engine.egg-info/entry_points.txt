@@ -1,2 +1,0 @@
-[console_scripts]
-transcriber-engine = transcriber_engine.__main__:main

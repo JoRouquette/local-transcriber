@@ -9,6 +9,7 @@ engine/.venv/
 engine/build/
 engine/dist/
 engine/__pycache__/
+engine/*.egg-info/
 **/__pycache__/
 *.pyc
 
