@@ -39,6 +39,30 @@ ils servent uniquement de référence.
 - Format libre (`.wav`, `.flac`, `.mp3`, `.m4a`, `.ogg`). En interne, tout est ramené en
   **mono 16 kHz** — le script fourni le fait proprement.
 
+## Texte à lire pour l'enregistrement
+
+Faites lire l'un de ces passages à la personne, à **voix naturelle et posée**, dans une
+pièce calme. Chacun dure environ **25 à 35 secondes** — largement suffisant pour un bon
+échantillon. Les textes sont volontairement variés phonétiquement.
+
+### Français
+
+> Bonjour, je m'appelle _(votre prénom)_ et j'enregistre ma voix pour aider le logiciel à me
+> reconnaître. Ce matin, le ciel est dégagé et une légère brise traverse le jardin. J'aime
+> prendre le temps de lire à voix haute, calmement, en articulant chaque mot. Le petit chat
+> gris dort près de la fenêtre pendant que le café chauffe doucement dans la cuisine.
+> Lorsque j'aurai terminé cette dernière phrase, l'échantillon sera assez long pour être
+> utile. Merci d'avance, et bonne journée à toutes et à tous.
+
+### English
+
+> Hello, my name is _(your first name)_, and I'm recording my voice so the software can
+> recognize me. This morning the sky is clear, and a gentle breeze drifts across the garden.
+> I enjoy reading out loud, slowly and calmly, giving each word its own space. The small grey
+> cat is asleep by the window while the coffee warms quietly in the kitchen. By the time I
+> finish this last sentence, the sample should be long enough to be useful. Thank you very
+> much, and have a wonderful day.
+
 ## Préparer un snippet avec le script fourni
 
 Le script `scripts/prepare-voice-snippet.ps1` extrait un échantillon propre (mono 16 kHz)
