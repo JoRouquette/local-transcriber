@@ -31,6 +31,7 @@ public partial class App : Application
         services.AddSingleton<ISnackbarMessageQueue>(_ => new SnackbarMessageQueue(TimeSpan.FromSeconds(3)));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<ThemeService>();
+        services.AddSingleton<UpdateService>();
 
         services.AddSingleton<GeneralViewModel>();
         services.AddSingleton<ProjectsViewModel>();

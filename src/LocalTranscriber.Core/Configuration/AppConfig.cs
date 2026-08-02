@@ -78,6 +78,9 @@ public sealed class AppConfig
     public string DataDir { get; set; } = @"%LOCALAPPDATA%\LocalTranscriber\data";
     public string EngineExecutable { get; set; } = @"engine\transcriber-engine.exe";
 
+    /// <summary>Installer automatiquement les mises à jour (téléchargées au lancement, appliquées à la fermeture).</summary>
+    public bool AutoInstallUpdates { get; set; } = true;
+
     /// <summary>
     /// Jeton Hugging Face pour la diarisation (pyannote). Stocke dans les parametres
     /// (jamais dans le depot). Si vide, on retombe sur la variable d'environnement

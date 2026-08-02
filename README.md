@@ -90,6 +90,8 @@ L'installeur est produit dans `build\Releases\` (petit — quelques dizaines de 
 
 Lancez l'installeur `LocalTranscriber-Setup.exe` de `build\Releases\`. Velopack installe l'app dans `%LOCALAPPDATA%\LocalTranscriber` et gère les mises à jour.
 
+**Mises à jour automatiques** : l'app vérifie les nouvelles releases GitHub au lancement. Onglet **À propos** → case *Installer automatiquement les mises à jour* (activée par défaut) : la nouvelle version est téléchargée puis installée à la fermeture. Décochée, l'app prévient et attend un clic sur *Installer et redémarrer*. Un bouton *Rechercher les mises à jour* permet aussi une vérification manuelle. (Actif uniquement sur l'app installée, pas en développement.)
+
 Ensuite, dans la GUI, onglet **Service & File** :
 
 1. **Installer / réinstaller le moteur** — au premier lancement, met en place l'environnement Python (uv installe Python 3.11 + PyTorch + dépendances). Nécessite une connexion Internet ; plusieurs minutes. Le journal s'affiche pendant l'installation.
@@ -197,7 +199,7 @@ Les versions suivent **SemVer** et sont publiées automatiquement par GitHub Act
 
 Déroulé sur `main` : un job Linux exécute **semantic-release** en *dry-run* (calcul de la
 version), puis, si une release est justifiée, un job `windows-latest` construit l'installeur
-complet (moteur gelé + .NET + `vpk pack`) et **Velopack** crée le tag `vX.Y.Z`, la GitHub
+léger (.NET + source moteur + `uv` + `vpk pack`) et **Velopack** crée le tag `vX.Y.Z`, la GitHub
 Release et publie `Setup.exe` + paquets (ce qui alimente l'**auto-update** de l'app).
 
 Notes :
