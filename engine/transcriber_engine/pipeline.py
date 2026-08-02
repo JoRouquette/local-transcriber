@@ -19,7 +19,16 @@ def _load_diarization_pipeline(hf_token: Optional[str], device: str):
         from whisperx.diarize import DiarizationPipeline  # whisperx recent
     except Exception:
         from whisperx import DiarizationPipeline  # ancienne position
-    return DiarizationPipeline(use_auth_token=hf_token, device=torch_device)
+    try:
+        return DiarizationPipeline(use_auth_token=hf_token, device=torch_device)
+    except AttributeError as e:
+        # Pipeline.from_pretrained renvoie None si le token est invalide ou si les
+        # conditions des modeles pyannote ne sont pas acceptees -> .to() casse.
+        raise RuntimeError(
+            "Diarisation indisponible : token Hugging Face invalide ou conditions non acceptees. "
+            "Acceptez-les (une fois) sur https://hf.co/pyannote/speaker-diarization-3.1 et "
+            "https://hf.co/pyannote/segmentation-3.0, puis reessayez."
+        ) from e
 
 
 def _normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
