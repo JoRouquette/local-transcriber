@@ -205,9 +205,13 @@ Release et publie `Setup.exe` + paquets (ce qui alimente l'**auto-update** de l'
 Notes :
 
 - **Première release** : il faut au moins un commit `feat:`/`fix:` — les commits non conventionnels ne déclenchent rien. Sinon, poser un tag initial `v0.1.0` comme point de départ.
-- **Taille** : l'installeur embarque le moteur gelé (torch, etc.), l'asset est volumineux ; surveiller la limite GitHub de 2 Go/fichier au premier build.
+- **Taille** : installeur léger (~110 Mo), le moteur Python s'installe au premier lancement — largement sous la limite GitHub de 2 Go/fichier.
 - **À venir (GitFlow)** : une branche `develop` sera ajoutée en canal *prerelease* (beta) — extension simple de `.releaserc.json` (branche `develop` en `prerelease`) et du déclencheur du workflow.
 
 ## Licences
 
-Composants tous gratuits et open source : WhisperX (BSD), faster-whisper/CTranslate2 (MIT), pyannote.audio (MIT, modèles sous conditions Hugging Face), SDK MCP C# (MIT), Velopack (MIT), PyInstaller (GPL avec exception permettant la distribution d'exécutables). Les poids Whisper sont sous licence MIT (OpenAI).
+Ce projet est distribué sous licence **MIT** (voir `LICENSE`).
+
+Composants tous gratuits et open source : WhisperX (BSD), faster-whisper/CTranslate2 (MIT), pyannote.audio (MIT, modèles sous conditions Hugging Face), SDK MCP C# (MIT), Velopack (MIT). Les poids Whisper sont sous licence MIT (OpenAI).
+
+**Signature de code** : l'installeur n'est pas encore signé (SmartScreen affiche « Éditeur inconnu » — cliquer *Informations complémentaires* → *Exécuter quand même*). La mise en place d'une signature gratuite via **SignPath Foundation** est décrite dans `docs/SIGNING.md`.
