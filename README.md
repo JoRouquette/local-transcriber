@@ -122,7 +122,7 @@ OutputRoot\                 <- miroir de l'arborescence
     2026-08-01_comite.txt
 ```
 
-- Le dossier `voices\` (nom configurable) contient un fichier audio par personne ; **le nom du fichier = le nom du locuteur**. Il sert de référence pour remplacer `SPEAKER_00` par un vrai nom, et n'est jamais transcrit.
+- Le dossier `voices\` (nom configurable) contient un fichier audio par personne ; **le nom du fichier = le nom du locuteur**. Il sert de référence pour remplacer `SPEAKER_00` par un vrai nom, et n'est jamais transcrit. Guide complet + script de préparation : [`docs/voice-snippets.md`](docs/voice-snippets.md).
 - Le `.md` est le format pensé pour Claude/MCP : frontmatter (source, langue, durée, locuteurs) + dialogue par tour de parole horodaté.
 
 ## Brancher Claude Desktop (MCP)
