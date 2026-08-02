@@ -1,0 +1,68 @@
+<UserControl x:Class="LocalTranscriber.Gui.Views.Pages.ServicePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Service &amp; File d'attente" FontSize="20" FontWeight="Medium" />
+
+        <materialDesign:Card Grid.Row="1" Padding="16,12" Margin="0,12" materialDesign:ElevationAssist.Elevation="Dp2">
+            <DockPanel>
+                <!-- Pastille d'état -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <materialDesign:PackIcon Kind="Circle" Width="16" Height="16" VerticalAlignment="Center">
+                        <materialDesign:PackIcon.Style>
+                            <Style TargetType="materialDesign:PackIcon">
+                                <Setter Property="Foreground" Value="#9E9E9E" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                                        <Setter Property="Foreground" Value="#4CAF50" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </materialDesign:PackIcon.Style>
+                    </materialDesign:PackIcon>
+                    <TextBlock Text="{Binding ServiceStatus}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="Medium" />
+                </StackPanel>
+
+                <!-- Actions -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding InstallServiceCommand}"
+                            Content="Installer" Margin="0,0,8,0" />
+                    <Button Style="{StaticResource MaterialDesignRaisedButton}" Command="{Binding StartServiceCommand}" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Démarrer" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding StopServiceCommand}" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Stop" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Arrêter" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource MaterialDesignIconButton}" Command="{Binding RefreshCommand}" ToolTip="Rafraîchir">
+                        <materialDesign:PackIcon Kind="Refresh" />
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </materialDesign:Card>
+
+        <materialDesign:Card Grid.Row="2" materialDesign:ElevationAssist.Elevation="Dp2">
+            <DataGrid ItemsSource="{Binding Jobs}" Style="{StaticResource MaterialDesignDataGrid}"
+                      AutoGenerateColumns="False" IsReadOnly="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />
+                    <DataGridTextColumn Header="Fichier" Binding="{Binding AudioPath}" Width="3*" />
+                    <DataGridTextColumn Header="Mis à jour" Binding="{Binding UpdatedAt, StringFormat=g}" Width="Auto" />
+                    <DataGridTextColumn Header="Erreur" Binding="{Binding Error}" Width="2*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </materialDesign:Card>
+    </Grid>
+</UserControl>

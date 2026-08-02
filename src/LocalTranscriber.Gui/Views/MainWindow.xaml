@@ -1,131 +1,75 @@
 <Window x:Class="LocalTranscriber.Gui.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:LocalTranscriber.Gui.ViewModels"
-        Title="LocalTranscriber — Configuration" Height="640" Width="900"
-        WindowStartupLocation="CenterScreen">
-    <Window.DataContext>
-        <vm:MainViewModel />
-    </Window.DataContext>
-    <Window.Resources>
-        <Style TargetType="TextBlock" x:Key="Label">
-            <Setter Property="Margin" Value="0,8,0,2" />
-            <Setter Property="FontWeight" Value="SemiBold" />
-        </Style>
-        <Style TargetType="Button">
-            <Setter Property="Padding" Value="10,4" />
-            <Setter Property="Margin" Value="0,0,8,0" />
-        </Style>
-    </Window.Resources>
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="LocalTranscriber" Height="720" Width="1040"
+        WindowStartupLocation="CenterScreen"
+        Style="{StaticResource MaterialDesignWindow}"
+        Background="{DynamicResource MaterialDesignPaper}"
+        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
+        FontFamily="{materialDesign:MaterialDesignFont}">
 
-    <DockPanel>
-        <Border DockPanel.Dock="Bottom" Background="#F3F3F3" Padding="10">
-            <StackPanel Orientation="Horizontal">
-                <Button Content="Enregistrer" Command="{Binding SaveCommand}" FontWeight="Bold" />
-                <Button Content="Recharger" Command="{Binding ReloadCommand}" />
-                <TextBlock Text="{Binding ServiceStatus, StringFormat='Service : {0}'}"
-                           VerticalAlignment="Center" Margin="16,0,0,0" />
-            </StackPanel>
-        </Border>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
 
-        <TabControl Margin="10">
-            <!-- Onglet General -->
-            <TabItem Header="Général">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="10">
-                        <TextBlock Text="Dossier surveillé (Inbox)" Style="{StaticResource Label}" />
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Parcourir…" Command="{Binding BrowseWatchCommand}" />
-                            <TextBox Text="{Binding WatchRoot, UpdateSourceTrigger=PropertyChanged}" />
-                        </DockPanel>
+        <!-- Barre d'application -->
+        <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryDark" Padding="16,10"
+                                  materialDesign:ElevationAssist.Elevation="Dp4">
+            <DockPanel>
+                <materialDesign:PackIcon Kind="Microphone" Width="26" Height="26" VerticalAlignment="Center" />
+                <TextBlock Text="LocalTranscriber" FontSize="18" FontWeight="Medium"
+                           VerticalAlignment="Center" Margin="12,0,0,0" />
 
-                        <TextBlock Text="Dossier de sortie (Outputs)" Style="{StaticResource Label}" />
-                        <DockPanel>
-                            <Button DockPanel.Dock="Right" Content="Parcourir…" Command="{Binding BrowseOutputCommand}" />
-                            <TextBox Text="{Binding OutputRoot, UpdateSourceTrigger=PropertyChanged}" />
-                        </DockPanel>
-
-                        <TextBlock Text="Cache des modèles" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding ModelCacheDir, UpdateSourceTrigger=PropertyChanged}" />
-
-                        <Separator Margin="0,14" />
-                        <TextBlock Text="Moteur (valeurs par défaut globales)" FontWeight="Bold" FontSize="14" />
-
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Modèle" Style="{StaticResource Label}" />
-                                <ComboBox ItemsSource="{Binding ModelSizes}" SelectedItem="{Binding ModelSize}" />
-                                <TextBlock Text="Périphérique (device)" Style="{StaticResource Label}" />
-                                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding Device}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
-                                <TextBlock Text="Type de calcul" Style="{StaticResource Label}" />
-                                <ComboBox ItemsSource="{Binding ComputeTypes}" SelectedItem="{Binding ComputeType}" />
-                                <TextBlock Text="Langue" Style="{StaticResource Label}" />
-                                <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" />
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="Jeton Hugging Face (requis pour la diarisation)" Style="{StaticResource Label}" />
-                        <TextBox Text="{Binding HfToken, UpdateSourceTrigger=PropertyChanged}"
-                                 FontFamily="Consolas" ToolTip="Collez ici votre token Hugging Face (hf_...). Laissez vide pour utiliser HF_TOKEN / .env." />
-                        <TextBlock Text="Gratuit : compte Hugging Face → accepter les conditions pyannote → générer un token 'read'."
-                                   Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
-
-                        <CheckBox Content="Diarisation (qui parle quand)" IsChecked="{Binding DiarizationEnabled}" Margin="0,14,0,4" />
-                        <CheckBox Content="Identification des locuteurs par snippets de voix" IsChecked="{Binding SpeakerIdEnabled}" Margin="0,4" />
-                        <StackPanel Orientation="Horizontal" Margin="24,0,0,0">
-                            <TextBlock Text="Seuil de similarité :" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <TextBox Width="60" Text="{Binding SpeakerThreshold}" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <Button Style="{StaticResource MaterialDesignToolButton}" Foreground="White"
+                            Command="{Binding ToggleThemeCommand}" ToolTip="Basculer le thème clair/sombre">
+                        <materialDesign:PackIcon Kind="ThemeLightDark" />
+                    </Button>
+                    <Button Style="{StaticResource MaterialDesignToolButton}" Foreground="White"
+                            Command="{Binding ReloadCommand}" ToolTip="Recharger la configuration">
+                        <materialDesign:PackIcon Kind="Refresh" />
+                    </Button>
+                    <Button Style="{StaticResource MaterialDesignRaisedLightButton}"
+                            Command="{Binding SaveCommand}" Margin="12,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="ContentSave" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBlock Text="Enregistrer" VerticalAlignment="Center" />
                         </StackPanel>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                    </Button>
+                </StackPanel>
+            </DockPanel>
+        </materialDesign:ColorZone>
 
-            <!-- Onglet Projets -->
-            <TabItem Header="Projets">
-                <DockPanel Margin="10">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
-                        <Button Content="Ajouter" Command="{Binding AddProjectCommand}" />
-                        <Button Content="Supprimer" Command="{Binding RemoveProjectCommand}" />
-                        <TextBlock Text="Les sous-dossiers du dossier surveillé. Vide = réglages globaux."
-                                   VerticalAlignment="Center" Foreground="#666" Margin="8,0,0,0" />
-                    </StackPanel>
-                    <DataGrid ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}"
-                              AutoGenerateColumns="False" CanUserAddRows="False">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Nom" Binding="{Binding Name}" Width="2*" />
-                            <DataGridTextColumn Header="Dossier (relatif)" Binding="{Binding RelativePath}" Width="3*" />
-                            <DataGridCheckBoxColumn Header="Actif" Binding="{Binding Enabled}" Width="Auto" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-            </TabItem>
+        <!-- Corps : navigation + contenu -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="224" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-            <!-- Onglet Service & File -->
-            <TabItem Header="Service &amp; File">
-                <DockPanel Margin="10">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-                        <Button Content="Installer le service" Command="{Binding InstallServiceCommand}" />
-                        <Button Content="Démarrer" Command="{Binding StartServiceCommand}" />
-                        <Button Content="Arrêter" Command="{Binding StopServiceCommand}" />
-                        <Button Content="Rafraîchir l'état" Command="{Binding RefreshStatusCommand}" />
-                        <Button Content="Rafraîchir la file" Command="{Binding RefreshJobsCommand}" />
-                    </StackPanel>
-                    <DataGrid ItemsSource="{Binding Jobs}" AutoGenerateColumns="False" IsReadOnly="True">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />
-                            <DataGridTextColumn Header="Fichier" Binding="{Binding AudioPath}" Width="3*" />
-                            <DataGridTextColumn Header="Maj" Binding="{Binding UpdatedAt}" Width="Auto" />
-                            <DataGridTextColumn Header="Erreur" Binding="{Binding Error}" Width="2*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </DockPanel>
-            </TabItem>
-        </TabControl>
-    </DockPanel>
+            <Border Grid.Column="0" Background="{DynamicResource MaterialDesignCardBackground}"
+                    BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="0,0,1,0">
+                <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNavItem}"
+                         Style="{StaticResource MaterialDesignNavigationPrimaryListBox}" Padding="0,8">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="4,10">
+                                <materialDesign:PackIcon Kind="{Binding Icon}" Width="22" Height="22"
+                                                         VerticalAlignment="Center" Margin="4,0,18,0" />
+                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontSize="14" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <ContentControl Grid.Column="1" Content="{Binding CurrentPage}" />
+
+            <materialDesign:Snackbar Grid.Column="1" MessageQueue="{Binding MessageQueue}"
+                                     VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,16" />
+        </Grid>
+    </Grid>
 </Window>
