@@ -36,8 +36,11 @@ ils servent uniquement de référence.
 - **Voix seule** : pas de musique, pas de deuxième voix, pas de forte réverbération.
 - **Parole naturelle** (phrases normales), pas un simple « allô allô ».
 - Idéalement le **même micro / contexte** que les enregistrements à transcrire.
-- Format libre (`.wav`, `.flac`, `.mp3`, `.m4a`, `.ogg`). En interne, tout est ramené en
-  **mono 16 kHz** — le script fourni le fait proprement.
+- **Format recommandé : `.wav` (ou `.flac`), mono 16 kHz** — ce sont les formats lus
+  nativement pour l'empreinte vocale. Les `.m4a`/`.mp3` peuvent ne pas être décodés pour
+  l'identification : convertissez-les d'abord avec le script fourni (voir plus bas). Si
+  l'identification échoue, le moteur le signale dans ses logs et garde les étiquettes
+  génériques.
 
 ## Texte à lire pour l'enregistrement
 

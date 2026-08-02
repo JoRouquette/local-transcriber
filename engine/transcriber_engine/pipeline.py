@@ -103,12 +103,22 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     id_map: dict[str, tuple[str, float]] = {}
     if req.speaker_id_enabled and req.voices_dir:
         try:
+            import sys
+
             from .speaker_id import SpeakerIdentifier
 
             identifier = SpeakerIdentifier(hf_token, device)
-            if identifier.load_voices(req.voices_dir) > 0:
+            n = identifier.load_voices(req.voices_dir)
+            print(f"[engine] snippets de voix charges : {n}", file=sys.stderr, flush=True)
+            if n > 0:
                 id_map = identifier.identify(req.audio_path, spans, req.speaker_id_threshold)
-        except Exception:
+                print(f"[engine] locuteurs identifies : {len(id_map)}/{len(spans)}", file=sys.stderr, flush=True)
+        except Exception as e:  # noqa: BLE001
+            import sys as _sys
+            import traceback
+
+            print(f"[engine] identification ignoree : {e}", file=_sys.stderr, flush=True)
+            traceback.print_exc()
             id_map = {}
 
     for seg in segments:
