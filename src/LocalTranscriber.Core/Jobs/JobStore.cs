@@ -18,7 +18,6 @@ public sealed class JobStore
         {
             DataSource = dbPath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared,
         }.ToString();
         EnsureCreated();
     }

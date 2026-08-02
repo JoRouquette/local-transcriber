@@ -19,4 +19,18 @@ public static class JsonDefaults
         PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
+
+    /// <summary>
+    /// Variante compacte (une seule ligne) — indispensable pour les protocoles
+    /// JSON-lines (sidecar d'embeddings) ou un JSON indente casserait la lecture ligne a ligne.
+    /// </summary>
+    public static readonly JsonSerializerOptions Compact = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DictionaryKeyPolicy = JsonNamingPolicy.SnakeCaseLower,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = false,
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
+    };
 }

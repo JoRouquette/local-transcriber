@@ -33,7 +33,8 @@ public sealed class EmbeddingClient
             await client.ConnectAsync(_host, _port, cts.Token);
 
             await using var stream = client.GetStream();
-            var payload = JsonSerializer.Serialize(request, JsonDefaults.Options) + "\n";
+            // JSON compact (une ligne) : le sidecar lit en JSON-lines.
+            var payload = JsonSerializer.Serialize(request, JsonDefaults.Compact) + "\n";
             var bytes = Encoding.UTF8.GetBytes(payload);
             await stream.WriteAsync(bytes, cts.Token);
             await stream.FlushAsync(cts.Token);
