@@ -24,6 +24,7 @@ av==12.3.0
 speechbrain==1.1.0
 transformers==4.40.2
 tokenizers==0.19.1
+nltk==3.8.1
 python-dotenv>=1.0.1
 srt>=3.5.3
 numpy==1.26.4

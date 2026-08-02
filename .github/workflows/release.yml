@@ -42,10 +42,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -59,7 +55,7 @@ jobs:
           NOTES: ${{ needs.version.outputs.notes }}
         run: $env:NOTES | Set-Content -Path notes.md -Encoding UTF8
 
-      - name: Build installeur (moteur gele + .NET + pack Velopack)
+      - name: Build installeur leger (.NET + source moteur + uv + pack Velopack)
         shell: pwsh
         run: .\build\build.ps1 -Version ${{ needs.version.outputs.version }} -ReleaseNotes notes.md
 

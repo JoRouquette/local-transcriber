@@ -1,19 +1,16 @@
 <#
 .SYNOPSIS
-    Build complet : moteur Python gele + publication .NET + packaging Velopack.
+    Build de l'installeur LEGER (sans gel PyInstaller) + packaging Velopack.
 .DESCRIPTION
-    1. Gele le moteur Python (build-engine.ps1) sauf si -SkipEngine.
-    2. Publie la GUI, le service et le serveur MCP (win-x64, self-contained).
-    3. Copie le moteur gele dans le dossier de publication (engine\).
-    4. Cree un installeur Velopack (necessite l'outil vpk : dotnet tool install -g vpk).
+    L'installeur ne contient QUE l'app .NET (petite) + la source du moteur Python + le
+    binaire uv. L'environnement Python (torch + deps) est installe au PREMIER LANCEMENT
+    par l'application (uv), dans %LOCALAPPDATA%. Resultat : asset de release largement
+    sous la limite GitHub de 2 Go, et build rapide.
 .EXAMPLE
-    .\build.ps1 -Version 0.1.0
-    .\build.ps1 -Version 0.1.0 -Cuda
+    .\build.ps1 -Version 1.0.0
 #>
 param(
     [string]$Version = "0.1.0",
-    [switch]$Cuda,
-    [switch]$SkipEngine,
     [string]$ReleaseNotes
 )
 
@@ -22,32 +19,33 @@ $root = Split-Path -Parent $PSScriptRoot
 $publish = Join-Path $root "build\publish"
 $releases = Join-Path $root "build\Releases"
 
-if (-not $SkipEngine) {
-    Write-Host "==> Gel du moteur Python" -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot "build-engine.ps1") -Cuda:$Cuda
-}
-
 Write-Host "==> Publication .NET (win-x64, self-contained)" -ForegroundColor Cyan
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $publish | Out-Null
 
 $common = @("-c", "Release", "-r", "win-x64", "--self-contained", "true",
-            "/p:PublishSingleFile=false", "/p:Version=$Version", "-o", $publish)
-
-# Le serveur MCP est desormais heberge par le service (HTTP) : la lib Mcp est tiree
-# automatiquement par LocalTranscriber.Service, pas de publication separee.
+            "/p:Version=$Version", "-o", $publish)
 dotnet publish (Join-Path $root "src\LocalTranscriber.Gui\LocalTranscriber.Gui.csproj") @common
 dotnet publish (Join-Path $root "src\LocalTranscriber.Service\LocalTranscriber.Service.csproj") @common
 
-Write-Host "==> Copie du moteur gele" -ForegroundColor Cyan
-$engineSrc = Join-Path $root "engine\dist\transcriber-engine"
+Write-Host "==> Copie de la source du moteur Python (pas de gel)" -ForegroundColor Cyan
 $engineDst = Join-Path $publish "engine"
-if (-not (Test-Path $engineSrc)) { throw "Moteur gele introuvable. Lancez build-engine.ps1 d'abord." }
-Copy-Item $engineSrc $engineDst -Recurse -Force
+New-Item -ItemType Directory -Force -Path $engineDst | Out-Null
+Copy-Item (Join-Path $root "engine\transcriber_engine") (Join-Path $engineDst "transcriber_engine") -Recurse -Force
+Copy-Item (Join-Path $root "engine\requirements.txt") $engineDst -Force
+Copy-Item (Join-Path $root "engine\pyproject.toml") $engineDst -Force
+Get-ChildItem $engineDst -Recurse -Directory -Filter "__pycache__" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host "==> Telechargement de uv (bootstrapper Python)" -ForegroundColor Cyan
+$uvDir = Join-Path $publish "uv"
+New-Item -ItemType Directory -Force -Path $uvDir | Out-Null
+$uvZip = Join-Path $env:TEMP "uv-win.zip"
+Invoke-WebRequest "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip" -OutFile $uvZip
+Expand-Archive $uvZip -DestinationPath $uvDir -Force
+if (-not (Test-Path (Join-Path $uvDir "uv.exe"))) { throw "uv.exe introuvable apres extraction." }
 
 Write-Host "==> Packaging Velopack" -ForegroundColor Cyan
-# Necessite : dotnet tool install -g vpk
-# Velopack cree par defaut UN raccourci Menu Demarrer (pas de raccourci Bureau) = choix voulu.
+# Velopack cree par defaut un raccourci Menu Demarrer (pas de raccourci Bureau).
 $icon = Join-Path $root "src\LocalTranscriber.Gui\Assets\app.ico"
 $packArgs = @(
     "pack",
@@ -64,4 +62,4 @@ if ($ReleaseNotes -and (Test-Path $ReleaseNotes)) {
 }
 vpk @packArgs
 
-Write-Host "OK -> installeur dans $releases" -ForegroundColor Green
+Write-Host "OK -> installeur (leger) dans $releases" -ForegroundColor Green

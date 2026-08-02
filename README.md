@@ -31,7 +31,7 @@ Une seule solution .NET 8 (`LocalTranscriber.sln`) + un moteur Python gelé :
 | `LocalTranscriber.Mcp` | Bibliothèque d'outils et de ressources MCP (hébergée par le service) | SDK MCP C# |
 | `engine/` | Transcription + alignement + diarisation + identification de locuteurs ; **sidecar d'embeddings** (e5-small) pour la recherche sémantique | Python (WhisperX + pyannote + sentence-transformers), gelé PyInstaller |
 
-Le moteur Python est **gelé en un exécutable autonome** (`transcriber-engine.exe`) : l'utilisateur final n'a **pas** besoin d'installer Python. Le même exécutable sert aussi de **sidecar d'embeddings résident** (`--serve-embeddings`), lancé et supervisé par le service. Les modèles (Whisper, pyannote, e5-small) se téléchargent au premier usage dans le cache local.
+**Installeur léger** : le paquet ne contient que l'app .NET (petite), la **source** du moteur Python et le binaire **`uv`**. Au **premier lancement**, l'application met en place l'environnement Python (uv installe Python 3.11 + PyTorch CPU + les dépendances pinnées) dans `%LOCALAPPDATA%\LocalTranscriber\engine-env`, puis l'exe console `transcriber-engine.exe` sert de moteur ET de **sidecar d'embeddings résident** (`--serve-embeddings`). Les modèles (Whisper, pyannote, e5-small) se téléchargent au premier usage. Ce choix évite de geler torch (~plusieurs Go) et garde l'installeur bien sous la limite GitHub de 2 Go.
 
 ### Recherche
 
@@ -54,10 +54,10 @@ Le moteur Python est **gelé en un exécutable autonome** (`transcriber-engine.e
 **Pour builder :**
 
 - [.NET SDK 8](https://dotnet.microsoft.com/download) + charge de travail Desktop (WPF).
-- [Python 3.11](https://www.python.org/downloads/) (pour geler le moteur).
-- Outil Velopack : `dotnet tool install -g vpk`
-- (Optionnel, build GPU) pilotes NVIDIA + CUDA 12.x.
-- Un compte Hugging Face gratuit (voir ci-dessous).
+- Outil Velopack : `dotnet tool install -g vpk`.
+- Un compte Hugging Face gratuit (voir ci-dessous), pour la diarisation à l'exécution.
+
+Python **n'est pas requis au build** : l'installeur embarque `uv`, qui met en place l'environnement Python 3.11 sur la machine de l'utilisateur au premier lancement.
 
 ## Jeton Hugging Face
 
@@ -75,24 +75,27 @@ Le token est stocké dans les paramètres de l'application (`config.json`, local
 
 ## Build
 
-```powershell
-# 1. Geler le moteur Python (CPU par défaut ; -Cuda pour GPU)
-.\build\build-engine.ps1            # ou : .\build\build-engine.ps1 -Cuda
+L'installeur est **léger** : il ne gèle pas le moteur. `build.ps1` publie l'app .NET, y copie la **source** du moteur Python et télécharge **`uv`**, puis packe avec Velopack.
 
-# 2. Build complet + installeur Velopack
-.\build\build.ps1 -Version 0.1.0    # ajoute -Cuda pour un build GPU
-#    (utilisez -SkipEngine si le moteur est déjà gelé)
+```powershell
+# Prérequis build : .NET SDK 8 + outil Velopack (dotnet tool install -g vpk). Python N'EST PAS requis au build.
+.\build\build.ps1 -Version 0.1.0
 ```
 
-L'installeur est produit dans `build\Releases\`.
+L'installeur est produit dans `build\Releases\` (petit — quelques dizaines de Mo).
 
-> Les versions de paquets (`ModelContextProtocol`, `Microsoft.Data.Sqlite`, PyTorch, WhisperX…) sont des points de départ. Au premier build, vérifiez/mettez à jour vers les dernières versions stables (`dotnet add package`, `pip install -U`).
+> `build\build-engine.ps1` (gel PyInstaller) reste disponible pour un usage optionnel, mais n'est plus utilisé par la chaîne d'installation.
 
 ## Installation
 
 Lancez l'installeur `LocalTranscriber-Setup.exe` de `build\Releases\`. Velopack installe l'app dans `%LOCALAPPDATA%\LocalTranscriber` et gère les mises à jour.
 
-Ensuite, depuis la GUI (onglet **Service & File**) : **Installer le service** puis **Démarrer** (déclenche l'UAC — le service tourne en tâche de fond, au démarrage de Windows).
+Ensuite, dans la GUI, onglet **Service & File** :
+
+1. **Installer / réinstaller le moteur** — au premier lancement, met en place l'environnement Python (uv installe Python 3.11 + PyTorch + dépendances). Nécessite une connexion Internet ; plusieurs minutes. Le journal s'affiche pendant l'installation.
+2. **Installer le service** puis **Démarrer** (déclenche l'UAC — le service tourne en tâche de fond, au démarrage de Windows).
+
+Tant que le moteur n'est pas installé, le service détecte et met en file les audios mais ne lance aucune transcription.
 
 ## Configuration (GUI)
 

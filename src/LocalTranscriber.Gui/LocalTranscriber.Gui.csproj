@@ -9,13 +9,23 @@
     <AssemblyName>LocalTranscriber</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Point d'entrée explicite (Velopack) : voir Program.cs. -->
+    <StartupObject>LocalTranscriber.Gui.Program</StartupObject>
   </PropertyGroup>
+
+  <!-- App.xaml en Page (et non ApplicationDefinition) pour que WPF ne génère PAS
+       son propre Main : c'est Program.Main qui pilote le démarrage. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" SubType="Designer" Generator="MSBuild:Compile" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="MaterialDesignThemes" Version="5.1.0" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>

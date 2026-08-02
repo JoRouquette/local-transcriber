@@ -34,3 +34,6 @@ models-cache/
 # Secrets / local config
 .env
 config.local.json
+
+# Logs de build local
+build/buildlocal.*

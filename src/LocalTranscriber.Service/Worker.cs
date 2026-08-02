@@ -33,7 +33,9 @@ public sealed class Worker : BackgroundService
 
     // Cache (chemin -> taille+date) pour eviter de re-hasher les fichiers inchanges a chaque scan.
     private readonly Dictionary<string, (long Size, long Mtime)> _seen = new(StringComparer.OrdinalIgnoreCase);
+    private readonly EngineSetup _engineSetup = new();
     private bool _quietLogged;
+    private bool _engineMissingLogged;
 
     public Worker(ILogger<Worker> logger, TranscriptIndex index, VectorStore vectors, EmbeddingClient embedder)
     {
@@ -59,17 +61,21 @@ public sealed class Worker : BackgroundService
                     continue;
                 }
 
-                if (_config.SemanticEnabled)
-                    await _sidecar.EnsureStartedAsync(_enginePath, _config.EmbeddingSidecarPort,
-                        ConfigStore.ExpandPath(_config.ModelCacheDir), _config.EmbeddingDevice, stoppingToken);
-
                 DrainCommands();
                 ScanAndEnqueue();
 
                 var outputRoot = ConfigStore.ExpandPath(_config.OutputRoot);
                 _index.Refresh(outputRoot); // rafraichissement FTS (leger), meme en inactivite
 
-                if (_config.IsQuietNow(DateTime.Now))
+                if (!File.Exists(_enginePath))
+                {
+                    if (!_engineMissingLogged)
+                    {
+                        _logger.LogWarning("Moteur Python non installe. Installez-le depuis l'application (onglet Service & File).");
+                        _engineMissingLogged = true;
+                    }
+                }
+                else if (_config.IsQuietNow(DateTime.Now))
                 {
                     if (!_quietLogged)
                     {
@@ -79,7 +85,13 @@ public sealed class Worker : BackgroundService
                 }
                 else
                 {
+                    _engineMissingLogged = false;
                     _quietLogged = false;
+
+                    if (_config.SemanticEnabled)
+                        await _sidecar.EnsureStartedAsync(_enginePath, _config.EmbeddingSidecarPort,
+                            ConfigStore.ExpandPath(_config.ModelCacheDir), _config.EmbeddingDevice, stoppingToken);
+
                     await ProcessQueueAsync(stoppingToken);
                     if (_config.SemanticEnabled)
                         await ReconcileVectorsAsync(outputRoot, 5, stoppingToken);
@@ -122,10 +134,13 @@ public sealed class Worker : BackgroundService
         _logger.LogInformation("Configuration (re)chargee. Moteur : {Engine}", _enginePath);
     }
 
-    private static string ResolveEnginePath(string configured)
+    private string ResolveEnginePath(string configured)
     {
         var p = ConfigStore.ExpandPath(configured);
-        return Path.IsPathRooted(p) ? p : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, p));
+        var resolved = Path.IsPathRooted(p) ? p : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, p));
+        // Si l'exe configure n'existe pas (installeur leger : moteur pas encore installe),
+        // on retombe sur l'executable de l'environnement Python mis en place au 1er lancement.
+        return File.Exists(resolved) ? resolved : _engineSetup.ConsoleExe;
     }
 
     private string? LoadHfToken()

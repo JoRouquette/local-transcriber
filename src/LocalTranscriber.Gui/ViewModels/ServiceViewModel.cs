@@ -1,9 +1,11 @@
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalTranscriber.Core.Configuration;
+using LocalTranscriber.Core.Engine;
 using LocalTranscriber.Core.Jobs;
 using LocalTranscriber.Gui.Services;
 using MaterialDesignThemes.Wpf;
@@ -34,6 +36,36 @@ public sealed partial class ServiceViewModel : ObservableObject
     [ObservableProperty] private string _serviceStatus = "…";
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private TranscriptionJob? _selectedJob;
+
+    // ---- Environnement moteur (installeur leger) ----
+    private readonly EngineSetup _engine = new();
+    [ObservableProperty] private bool _engineReady;
+    [ObservableProperty] private bool _isInstallingEngine;
+    [ObservableProperty] private string _engineSetupLog = "";
+
+    [RelayCommand]
+    private async Task InstallEngine()
+    {
+        if (IsInstallingEngine) return;
+        IsInstallingEngine = true;
+        EngineSetupLog = "";
+        var progress = new Progress<string>(line =>
+        {
+            var text = EngineSetupLog + line + "\n";
+            EngineSetupLog = text.Length > 16000 ? text[^16000..] : text;
+        });
+        try
+        {
+            _snackbar.Enqueue("Installation du moteur Python… (plusieurs minutes au premier lancement)");
+            var ok = await _engine.SetupAsync(progress, cuda: false);
+            EngineReady = _engine.IsReady;
+            _snackbar.Enqueue(ok ? "Moteur installé." : "Échec de l'installation (voir le journal ci-dessous).");
+        }
+        finally
+        {
+            IsInstallingEngine = false;
+        }
+    }
 
     [RelayCommand]
     private void ReprocessFile()
@@ -84,6 +116,7 @@ public sealed partial class ServiceViewModel : ObservableObject
         var status = await Task.Run(WindowsServiceControl.QueryStatus);
         ServiceStatus = status;
         IsRunning = status.Contains("cours", StringComparison.OrdinalIgnoreCase);
+        EngineReady = _engine.IsReady;
 
         var jobs = await Task.Run(LoadJobs);
         Jobs.Clear();
