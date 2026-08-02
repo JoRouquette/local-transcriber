@@ -25,13 +25,18 @@ Une seule solution .NET 8 (`LocalTranscriber.sln`) + un moteur Python gelé :
 
 | Composant | Rôle | Techno |
 |---|---|---|
-| `LocalTranscriber.Core` | Config, file de jobs (SQLite), miroir des chemins, invocation du moteur, index de recherche FTS5 | .NET 8 (lib) |
-| `LocalTranscriber.Service` | Service Windows : surveille le dossier, traite la file, rafraîchit l'index | .NET Worker Service |
+| `LocalTranscriber.Core` | Config, file de jobs (SQLite), miroir des chemins, invocation du moteur, index FTS5 + vecteurs, recherche hybride | .NET 8 (lib) |
+| `LocalTranscriber.Service` | Hôte ASP.NET Core installable en service Windows : surveille le dossier, traite la file, indexe (FTS + vecteurs), pilote le sidecar d'embeddings, et **sert le MCP en HTTP** | ASP.NET Core + Worker |
 | `LocalTranscriber.Gui` | GUI de paramétrage (dossiers, moteur, projets, snippets, service, file d'attente) | WPF |
-| `LocalTranscriber.Mcp` | Serveur MCP stdio interrogé par Claude Desktop | SDK MCP C# |
-| `engine/` | Transcription + alignement + diarisation + identification de locuteurs | Python (WhisperX + pyannote), gelé PyInstaller |
+| `LocalTranscriber.Mcp` | Bibliothèque d'outils et de ressources MCP (hébergée par le service) | SDK MCP C# |
+| `engine/` | Transcription + alignement + diarisation + identification de locuteurs ; **sidecar d'embeddings** (e5-small) pour la recherche sémantique | Python (WhisperX + pyannote + sentence-transformers), gelé PyInstaller |
 
-Le moteur Python est **gelé en un exécutable autonome** (`transcriber-engine.exe`) : l'utilisateur final n'a **pas** besoin d'installer Python. Les modèles (Whisper, pyannote) se téléchargent au premier traitement dans le cache local.
+Le moteur Python est **gelé en un exécutable autonome** (`transcriber-engine.exe`) : l'utilisateur final n'a **pas** besoin d'installer Python. Le même exécutable sert aussi de **sidecar d'embeddings résident** (`--serve-embeddings`), lancé et supervisé par le service. Les modèles (Whisper, pyannote, e5-small) se téléchargent au premier usage dans le cache local.
+
+### Recherche
+
+- **FTS5** (mots-clés) + **sémantique** (vecteurs e5-small multilingues, cosinus) fusionnés par **Reciprocal Rank Fusion**. La sémantique est le moteur principal ; les mots-clés rattrapent les termes exacts (noms propres, CIP).
+- Le service est **seul rédacteur** de l'index (`index.db`) ; le MCP, dans le même processus, ne fait que **lire**.
 
 ## Fonctionnement
 
@@ -39,11 +44,12 @@ Le moteur Python est **gelé en un exécutable autonome** (`transcriber-engine.e
 2. Le service détecte les fichiers stables, les met en file (idempotent : jamais deux fois le même).
 3. Le moteur transcrit (langue auto), aligne, diarise, et — si activé — identifie les locuteurs via des snippets de voix.
 4. Les sorties sont écrites dans `OutputRoot\<Projet>\...` en `.md`, `.json`, `.srt`, `.txt`.
-5. Le serveur MCP indexe les sorties ; Claude Desktop peut lister, chercher et lire les transcriptions.
+5. Le service indexe les sorties (FTS + vecteurs sémantiques via le sidecar d'embeddings).
+6. Le service expose le MCP en HTTP local ; Claude Desktop liste, cherche (hybride) et lit les transcriptions, y compris comme ressources attachables.
 
 ## Prérequis
 
-**Pour utiliser l'app installée :** Windows 10/11 (x64). Rien d'autre — tout est empaqueté.
+**Pour utiliser l'app installée :** Windows 10/11 (x64). Rien d'autre — tout est empaqueté. (Node/`npx` seulement si vous branchez Claude Desktop via le pont `mcp-remote` ; inutile avec l'URL native.)
 
 **Pour builder :**
 
@@ -125,21 +131,32 @@ OutputRoot\                 <- miroir de l'arborescence
 
 ## Brancher Claude Desktop (MCP)
 
-Ajoutez le serveur MCP au fichier de config de Claude Desktop
-(`%APPDATA%\Claude\claude_desktop_config.json`), voir `docs\claude_desktop_config.example.json` :
+Le service expose le MCP en **HTTP local** sur `http://127.0.0.1:<mcpPort>/mcp` (défaut `8765`, `127.0.0.1` uniquement). Deux façons de le brancher dans `%APPDATA%\Claude\claude_desktop_config.json` (voir `docs\claude_desktop_config.example.json`) :
+
+Pont `mcp-remote` (compatible partout, nécessite Node/`npx`) :
 
 ```json
 {
   "mcpServers": {
     "local-transcriber": {
-      "command": "C:\\Users\\<vous>\\AppData\\Local\\LocalTranscriber\\current\\LocalTranscriber.Mcp.exe",
-      "args": []
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]
     }
   }
 }
 ```
 
-Redémarrez Claude Desktop. Outils exposés : `list_projects`, `list_transcripts`, `search_transcripts` (recherche plein-texte, filtrable par projet/locuteur) et `get_transcript`.
+URL native (si votre version de Claude Desktop accepte les serveurs MCP par URL) :
+
+```json
+{ "mcpServers": { "local-transcriber": { "url": "http://127.0.0.1:8765/mcp" } } }
+```
+
+Redémarrez Claude Desktop.
+
+**Outils** : `list_projects`, `list_transcripts`, `get_speakers`, `search_transcripts(query, mode=hybrid|semantic|keyword, project?, speaker?, limit?)`, `get_transcript(path, speaker?, offset?, limit?)` (paginé, `next_offset`).
+
+**Ressources** : chaque transcription est adressable en `transcript://{projet}/{fichier}` (Markdown), attachable directement dans une conversation.
 
 ## Exécuter sans installer (dev)
 
@@ -147,15 +164,15 @@ Redémarrez Claude Desktop. Outils exposés : `list_projects`, `list_transcripts
 # Moteur : selftest de l'environnement Python
 cd engine ; python -m transcriber_engine --selftest
 
-# Service en console (Ctrl+C pour arrêter)
+# Service en console (surveille + indexe + démarre le sidecar + sert le MCP HTTP)
 dotnet run --project src\LocalTranscriber.Service
+#   -> MCP disponible sur http://127.0.0.1:8765/mcp
 
 # GUI
 dotnet run --project src\LocalTranscriber.Gui
-
-# Serveur MCP (stdio) — normalement lancé par Claude Desktop
-dotnet run --project src\LocalTranscriber.Mcp
 ```
+
+Le serveur MCP n'est plus un exécutable séparé : il est hébergé par le service (HTTP). Le sidecar d'embeddings (`transcriber-engine.exe --serve-embeddings`) est lancé automatiquement par le service.
 
 En dev, `config.json` est cherché dans `%PROGRAMDATA%\LocalTranscriber\` ; créez-le via la GUI (bouton Enregistrer) ou copiez `config.example.json`.
 

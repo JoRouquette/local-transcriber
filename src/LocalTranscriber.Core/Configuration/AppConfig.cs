@@ -73,6 +73,15 @@ public sealed class AppConfig
     public int StabilizationSeconds { get; set; } = 5;
     public int MaxParallelJobs { get; set; } = 1;
 
+    // ---- Serveur MCP (HTTP local) et recherche semantique ----
+    public int McpPort { get; set; } = 8765;
+    public bool SemanticEnabled { get; set; } = true;
+    public int EmbeddingSidecarPort { get; set; } = 8766;
+    public string EmbeddingModel { get; set; } = "intfloat/multilingual-e5-small";
+    public string EmbeddingDevice { get; set; } = "cpu";
+    public int ChunkMaxChars { get; set; } = 800;
+    public int ChunkOverlapSegments { get; set; } = 1;
+
     public EngineConfig Engine { get; set; } = new();
     public DiarizationConfig Diarization { get; set; } = new();
     public SpeakerIdConfig SpeakerIdentification { get; set; } = new();

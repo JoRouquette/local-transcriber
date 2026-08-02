@@ -1,8 +1,20 @@
 {
-  "mcpServers": {
-    "local-transcriber": {
-      "command": "C:\\Users\\<vous>\\AppData\\Local\\LocalTranscriber\\current\\LocalTranscriber.Mcp.exe",
-      "args": []
+  "_comment": "Le service LocalTranscriber expose le MCP en HTTP sur http://127.0.0.1:<mcpPort>/mcp (defaut 8765). Deux facons de le brancher a Claude Desktop.",
+
+  "_variante_A_pont_mcp_remote": {
+    "mcpServers": {
+      "local-transcriber": {
+        "command": "npx",
+        "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]
+      }
+    }
+  },
+
+  "_variante_B_url_native_si_supportee": {
+    "mcpServers": {
+      "local-transcriber": {
+        "url": "http://127.0.0.1:8765/mcp"
+      }
     }
   }
 }

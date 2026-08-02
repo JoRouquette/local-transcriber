@@ -29,6 +29,7 @@ _heavy_packages = [
     "soundfile",
     "transformers",
     "huggingface_hub",
+    "sentence_transformers",
 ]
 
 for _pkg in _heavy_packages:

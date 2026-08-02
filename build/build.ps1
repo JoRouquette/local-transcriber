@@ -33,9 +33,10 @@ New-Item -ItemType Directory -Force -Path $publish | Out-Null
 $common = @("-c", "Release", "-r", "win-x64", "--self-contained", "true",
             "/p:PublishSingleFile=false", "/p:Version=$Version", "-o", $publish)
 
+# Le serveur MCP est desormais heberge par le service (HTTP) : la lib Mcp est tiree
+# automatiquement par LocalTranscriber.Service, pas de publication separee.
 dotnet publish (Join-Path $root "src\LocalTranscriber.Gui\LocalTranscriber.Gui.csproj") @common
 dotnet publish (Join-Path $root "src\LocalTranscriber.Service\LocalTranscriber.Service.csproj") @common
-dotnet publish (Join-Path $root "src\LocalTranscriber.Mcp\LocalTranscriber.Mcp.csproj") @common
 
 Write-Host "==> Copie du moteur gele" -ForegroundColor Cyan
 $engineSrc = Join-Path $root "engine\dist\transcriber-engine"

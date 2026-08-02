@@ -33,11 +33,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--request", help="Chemin d'un fichier JSON EngineRequest.")
     parser.add_argument("--selftest", action="store_true", help="Verifie l'environnement.")
     parser.add_argument("--version", action="store_true")
+    parser.add_argument("--serve-embeddings", action="store_true",
+                        help="Demarre le sidecar d'embeddings (serveur TCP JSON-lines).")
+    parser.add_argument("--port", type=int, default=8766, help="Port du sidecar d'embeddings.")
+    parser.add_argument("--model", default=None, help="Modele d'embedding (defaut e5-small).")
+    parser.add_argument("--device", default="cpu", help="cpu | cuda pour le sidecar d'embeddings.")
+    parser.add_argument("--cache-dir", default=None, help="Cache des modeles (embeddings).")
     args = parser.parse_args(argv)
 
     if args.version:
         print(__version__)
         return 0
+
+    if args.serve_embeddings:
+        from .embeddings import DEFAULT_MODEL
+        from .serve import serve
+
+        return serve(args.port, args.model or DEFAULT_MODEL, args.cache_dir, args.device)
 
     # Charge le token HF depuis .env si present, sinon variable d'environnement.
     try:
@@ -63,6 +75,12 @@ def main(argv: list[str] | None = None) -> int:
             info["whisperx"] = "ok"
         except Exception as e:  # noqa: BLE001
             info["whisperx_error"] = str(e)
+        try:
+            import sentence_transformers  # noqa: F401
+
+            info["sentence_transformers"] = "ok"
+        except Exception as e:  # noqa: BLE001
+            info["sentence_transformers_error"] = str(e)
         print(json.dumps(info, ensure_ascii=False, indent=2))
         return 0
 

@@ -12,5 +12,8 @@ srt>=3.5.3
 numpy>=1.26,<2.0
 soundfile>=0.12.1
 
+# Recherche semantique (sidecar d'embeddings) : e5-small multilingue
+sentence-transformers>=3.0.0
+
 # Packaging
 pyinstaller>=6.6.0

@@ -28,16 +28,18 @@ public sealed record TranscriptDoc(
 public sealed class TranscriptIndex
 {
     private readonly string _connectionString;
+    private readonly bool _readOnly;
 
-    public TranscriptIndex(string dbPath)
+    public TranscriptIndex(string dbPath, bool readOnly = false)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+        _readOnly = readOnly;
+        if (!readOnly) Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = dbPath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
+            Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
         }.ToString();
-        EnsureCreated();
+        if (!readOnly) EnsureCreated();
     }
 
     private SqliteConnection Open()
@@ -72,6 +74,7 @@ public sealed class TranscriptIndex
     /// <summary>Scanne le dossier de sortie et (re)indexe les .json nouveaux ou modifies.</summary>
     public int Refresh(string outputRoot)
     {
+        if (_readOnly) return 0; // seul le service (redacteur) rafraichit l'index
         if (!Directory.Exists(outputRoot)) return 0;
         var indexed = 0;
         using var c = Open();
@@ -200,6 +203,23 @@ public sealed class TranscriptIndex
         while (r.Read())
             hits.Add(new TranscriptHit(r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5)));
         return hits;
+    }
+
+    public IReadOnlyList<string> ListSpeakers(string? project = null)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT speakers FROM documents WHERE ($proj IS NULL OR project = $proj)";
+        cmd.Parameters.AddWithValue("$proj", (object?)project ?? DBNull.Value);
+        var set = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            if (r.IsDBNull(0)) continue;
+            foreach (var s in r.GetString(0).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                set.Add(s);
+        }
+        return set.ToList();
     }
 
     public IReadOnlyList<string> ListProjects()

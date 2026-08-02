@@ -7,6 +7,13 @@
   "fileTypes": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
   "stabilizationSeconds": 5,
   "maxParallelJobs": 1,
+  "mcpPort": 8765,
+  "semanticEnabled": true,
+  "embeddingSidecarPort": 8766,
+  "embeddingModel": "intfloat/multilingual-e5-small",
+  "embeddingDevice": "cpu",
+  "chunkMaxChars": 800,
+  "chunkOverlapSegments": 1,
   "engine": {
     "modelSize": "large-v3",
     "device": "auto",
