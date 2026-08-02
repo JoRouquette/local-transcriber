@@ -23,11 +23,11 @@ $py = Join-Path $engineDir ".venv\Scripts\python.exe"
 
 & $py -m pip install --upgrade pip
 
-Write-Host "==> Installation de PyTorch" -ForegroundColor Cyan
+Write-Host "==> Installation de PyTorch (2.2.2, aligne sur la stack pinnee)" -ForegroundColor Cyan
 if ($Cuda) {
-    & $py -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+    & $py -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 } else {
-    & $py -m pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+    & $py -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cpu
 }
 
 Write-Host "==> Installation des dependances du moteur" -ForegroundColor Cyan

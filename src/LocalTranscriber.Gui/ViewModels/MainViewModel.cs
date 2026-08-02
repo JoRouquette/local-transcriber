@@ -52,6 +52,8 @@ public sealed class MainViewModel : ViewModelBase
     public string ComputeType { get => _config.Engine.ComputeType; set { _config.Engine.ComputeType = value; OnPropertyChanged(); } }
     public string Language { get => _config.Engine.Language; set { _config.Engine.Language = value; OnPropertyChanged(); } }
 
+    public string HfToken { get => _config.HfToken ?? ""; set { _config.HfToken = value; OnPropertyChanged(); } }
+
     public bool DiarizationEnabled { get => _config.Diarization.Enabled; set { _config.Diarization.Enabled = value; OnPropertyChanged(); } }
     public bool SpeakerIdEnabled { get => _config.SpeakerIdentification.Enabled; set { _config.SpeakerIdentification.Enabled = value; OnPropertyChanged(); } }
     public double SpeakerThreshold { get => _config.SpeakerIdentification.Threshold; set { _config.SpeakerIdentification.Threshold = value; OnPropertyChanged(); } }
@@ -94,7 +96,7 @@ public sealed class MainViewModel : ViewModelBase
         foreach (var p in _config.Projects) Projects.Add(p);
         foreach (var name in new[] { nameof(WatchRoot), nameof(OutputRoot), nameof(ModelCacheDir),
                      nameof(ModelSize), nameof(Device), nameof(ComputeType), nameof(Language),
-                     nameof(DiarizationEnabled), nameof(SpeakerIdEnabled), nameof(SpeakerThreshold) })
+                     nameof(DiarizationEnabled), nameof(SpeakerIdEnabled), nameof(SpeakerThreshold), nameof(HfToken) })
             OnPropertyChanged(name);
         RefreshJobs();
     }

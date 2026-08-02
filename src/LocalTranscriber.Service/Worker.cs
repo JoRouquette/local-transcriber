@@ -109,6 +109,10 @@ public sealed class Worker : BackgroundService
 
     private string? LoadHfToken()
     {
+        // 1. Parametres de l'application (recommande).
+        if (!string.IsNullOrWhiteSpace(_config.HfToken)) return _config.HfToken.Trim();
+
+        // 2. Repli : variable d'environnement.
         var fromEnv = Environment.GetEnvironmentVariable("HF_TOKEN");
         if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv;
 

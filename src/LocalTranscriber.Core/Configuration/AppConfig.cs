@@ -65,6 +65,13 @@ public sealed class AppConfig
     public string DataDir { get; set; } = @"%LOCALAPPDATA%\LocalTranscriber\data";
     public string EngineExecutable { get; set; } = @"engine\transcriber-engine.exe";
 
+    /// <summary>
+    /// Jeton Hugging Face pour la diarisation (pyannote). Stocke dans les parametres
+    /// (jamais dans le depot). Si vide, on retombe sur la variable d'environnement
+    /// HF_TOKEN ou un fichier .env a cote de l'executable.
+    /// </summary>
+    public string? HfToken { get; set; }
+
     public List<string> FileTypes { get; set; } = new()
     {
         ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac"

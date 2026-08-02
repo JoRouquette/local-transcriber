@@ -69,13 +69,9 @@ La diarisation pyannote nécessite un jeton **gratuit** :
    - <https://huggingface.co/pyannote/segmentation-3.0>
    - <https://huggingface.co/pyannote/embedding> (seulement si vous utilisez l'identification par snippets)
 3. Générez un token « read » : <https://huggingface.co/settings/tokens>.
-4. Copiez `.env.example` en `.env` (à côté de l'exécutable installé, ou à la racine du repo en dev) et collez le token :
+4. Renseignez-le dans **la GUI → onglet Général → « Jeton Hugging Face »**, puis Enregistrer.
 
-   ```
-   HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   ```
-
-Le token n'est jamais écrit dans les fichiers de config ou temporaires : il transite uniquement par la variable d'environnement `HF_TOKEN`.
+Le token est stocké dans les paramètres de l'application (`config.json`, local à la machine, hors dépôt) — adapté à une distribution open source : rien n'est codé en dur, chaque utilisateur met le sien. Si le champ est vide, l'application retombe sur la variable d'environnement `HF_TOKEN`, puis sur un fichier `.env` à côté de l'exécutable. Le token est transmis au moteur uniquement par variable d'environnement du sous-processus (jamais écrit dans un fichier temporaire).
 
 ## Build
 

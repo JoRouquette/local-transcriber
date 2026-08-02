@@ -18,21 +18,69 @@ public static class ConfigStore
     public static string ExpandPath(string path) =>
         string.IsNullOrWhiteSpace(path) ? path : Environment.ExpandEnvironmentVariables(path);
 
+    /// <summary>Fichier de secrets local (hors depot) qui surcharge le config partageable.</summary>
+    public const string LocalFileName = "config.local.json";
+
     public static AppConfig Load(string? path = null)
     {
         path ??= DefaultConfigPath;
-        if (!File.Exists(path))
-            return new AppConfig();
+        var config = File.Exists(path)
+            ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonDefaults.Options) ?? new AppConfig()
+            : new AppConfig();
 
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<AppConfig>(json, JsonDefaults.Options) ?? new AppConfig();
+        ApplyLocalOverlay(config, path);
+        return config;
+    }
+
+    /// <summary>
+    /// Superpose les secrets de config.local.json (actuellement : hf_token). Cherche le
+    /// fichier a cote du config, puis dans le repertoire courant, puis a cote de l'exe —
+    /// ce qui couvre l'app installee comme l'execution en dev depuis le depot.
+    /// </summary>
+    private static void ApplyLocalOverlay(AppConfig config, string mainPath)
+    {
+        foreach (var dir in LocalSearchDirs(mainPath))
+        {
+            var local = Path.Combine(dir, LocalFileName);
+            if (!File.Exists(local)) continue;
+            try
+            {
+                var overlay = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(local), JsonDefaults.Options);
+                if (overlay is not null && !string.IsNullOrWhiteSpace(overlay.HfToken))
+                    config.HfToken = overlay.HfToken;
+            }
+            catch { /* fichier local invalide : on ignore */ }
+            break; // premier trouve = gagnant
+        }
+    }
+
+    private static IEnumerable<string> LocalSearchDirs(string mainPath)
+    {
+        var configDir = Path.GetDirectoryName(mainPath);
+        if (!string.IsNullOrEmpty(configDir)) yield return configDir;
+        yield return Directory.GetCurrentDirectory();
+        yield return AppContext.BaseDirectory;
     }
 
     public static void Save(AppConfig config, string? path = null)
     {
         path ??= DefaultConfigPath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var json = JsonSerializer.Serialize(config, JsonDefaults.Options);
-        File.WriteAllText(path, json);
+        var dir = Path.GetDirectoryName(path)!;
+        Directory.CreateDirectory(dir);
+
+        // Le secret (hf_token) ne va pas dans le config partageable, mais dans config.local.json.
+        var token = config.HfToken;
+        config.HfToken = null;
+        File.WriteAllText(path, JsonSerializer.Serialize(config, JsonDefaults.Options));
+        config.HfToken = token; // restaure l'objet en memoire
+
+        var localPath = Path.Combine(dir, LocalFileName);
+        if (!string.IsNullOrWhiteSpace(token))
+            File.WriteAllText(localPath, JsonSerializer.Serialize(new LocalSecrets { HfToken = token }, JsonDefaults.Options));
+    }
+
+    private sealed class LocalSecrets
+    {
+        public string? HfToken { get; set; }
     }
 }

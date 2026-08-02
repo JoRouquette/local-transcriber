@@ -1,35 +1,36 @@
 {
-  "watchRoot": "C:\\Transcriptions\\Inbox",
-  "outputRoot": "C:\\Transcriptions\\Outputs",
-  "modelCacheDir": "%LOCALAPPDATA%\\LocalTranscriber\\models",
-  "dataDir": "%LOCALAPPDATA%\\LocalTranscriber\\data",
-  "engineExecutable": "engine\\transcriber-engine.exe",
-  "fileTypes": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
-  "stabilizationSeconds": 5,
-  "maxParallelJobs": 1,
-  "mcpPort": 8765,
-  "semanticEnabled": true,
-  "embeddingSidecarPort": 8766,
-  "embeddingModel": "intfloat/multilingual-e5-small",
-  "embeddingDevice": "cpu",
-  "chunkMaxChars": 800,
-  "chunkOverlapSegments": 1,
+  "watch_root": "C:\\Transcriptions\\Inbox",
+  "output_root": "C:\\Transcriptions\\Outputs",
+  "model_cache_dir": "%LOCALAPPDATA%\\LocalTranscriber\\models",
+  "data_dir": "%LOCALAPPDATA%\\LocalTranscriber\\data",
+  "engine_executable": "engine\\transcriber-engine.exe",
+  "hf_token": "",
+  "file_types": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
+  "stabilization_seconds": 5,
+  "max_parallel_jobs": 1,
+  "mcp_port": 8765,
+  "semantic_enabled": true,
+  "embedding_sidecar_port": 8766,
+  "embedding_model": "intfloat/multilingual-e5-small",
+  "embedding_device": "cpu",
+  "chunk_max_chars": 800,
+  "chunk_overlap_segments": 1,
   "engine": {
-    "modelSize": "large-v3",
+    "model_size": "large-v3",
     "device": "auto",
-    "computeType": "auto",
-    "batchSize": 16,
+    "compute_type": "auto",
+    "batch_size": 16,
     "language": "auto"
   },
   "diarization": {
     "enabled": true,
-    "minSpeakers": null,
-    "maxSpeakers": null
+    "min_speakers": null,
+    "max_speakers": null
   },
-  "speakerIdentification": {
+  "speaker_identification": {
     "enabled": false,
     "threshold": 0.55,
-    "voicesDirName": "voices"
+    "voices_dir_name": "voices"
   },
   "outputs": {
     "markdown": true,
@@ -40,10 +41,10 @@
   "projects": [
     {
       "name": "Exemple - Reunions",
-      "relativePath": "Reunions",
+      "relative_path": "Reunions",
       "enabled": true,
-      "engine": { "modelSize": "medium" },
-      "speakerIdentification": { "enabled": true, "voicesDirName": "voices" }
+      "engine": { "model_size": "medium" },
+      "speaker_identification": { "enabled": true, "voices_dir_name": "voices" }
     }
   ]
 }

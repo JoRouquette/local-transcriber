@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: transcriber-engine
+Version: 0.1.0
+Summary: Moteur local de transcription / diarisation / embeddings pour LocalTranscriber
+Requires-Python: >=3.10

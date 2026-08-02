@@ -70,6 +70,12 @@
                             </StackPanel>
                         </Grid>
 
+                        <TextBlock Text="Jeton Hugging Face (requis pour la diarisation)" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding HfToken, UpdateSourceTrigger=PropertyChanged}"
+                                 FontFamily="Consolas" ToolTip="Collez ici votre token Hugging Face (hf_...). Laissez vide pour utiliser HF_TOKEN / .env." />
+                        <TextBlock Text="Gratuit : compte Hugging Face → accepter les conditions pyannote → générer un token 'read'."
+                                   Foreground="#666" FontSize="11" TextWrapping="Wrap" Margin="0,2,0,0" />
+
                         <CheckBox Content="Diarisation (qui parle quand)" IsChecked="{Binding DiarizationEnabled}" Margin="0,14,0,4" />
                         <CheckBox Content="Identification des locuteurs par snippets de voix" IsChecked="{Binding SpeakerIdEnabled}" Margin="0,4" />
                         <StackPanel Orientation="Horizontal" Margin="24,0,0,0">

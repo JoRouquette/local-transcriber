@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transcriber-engine"
+version = "0.1.0"
+description = "Moteur local de transcription / diarisation / embeddings pour LocalTranscriber"
+requires-python = ">=3.10"
+# Les dependances lourdes (torch, whisperx, pyannote, sentence-transformers) sont
+# installees via requirements.txt. Ici on ne declare que le point d'entree console :
+# `pip install -e . --no-deps` cree engine\.venv\Scripts\transcriber-engine.exe,
+# un vrai executable que le service et le sidecar invoquent comme le binaire gele.
+
+[project.scripts]
+transcriber-engine = "transcriber_engine.__main__:main"
+
+[tool.setuptools]
+packages = ["transcriber_engine"]

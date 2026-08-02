@@ -1,0 +1,15 @@
+pyproject.toml
+transcriber_engine/__init__.py
+transcriber_engine/__main__.py
+transcriber_engine/device.py
+transcriber_engine/embeddings.py
+transcriber_engine/models.py
+transcriber_engine/pipeline.py
+transcriber_engine/serve.py
+transcriber_engine/speaker_id.py
+transcriber_engine/writers.py
+transcriber_engine.egg-info/PKG-INFO
+transcriber_engine.egg-info/SOURCES.txt
+transcriber_engine.egg-info/dependency_links.txt
+transcriber_engine.egg-info/entry_points.txt
+transcriber_engine.egg-info/top_level.txt
