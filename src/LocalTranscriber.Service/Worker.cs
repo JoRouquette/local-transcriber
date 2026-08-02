@@ -48,6 +48,12 @@ public sealed class Worker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // IMPORTANT (service Windows) : rendre la main immediatement pour que l'hote
+        // termine son demarrage et signale "En cours d'execution" au SCM sans attendre
+        // le premier scan (qui, sur un dossier volumineux ou synchronise cloud, peut
+        // depasser le delai de 30 s => erreur SCM 7009 "le service n'a pas repondu").
+        await Task.Yield();
+
         _logger.LogInformation("LocalTranscriber demarre.");
 
         while (!stoppingToken.IsCancellationRequested)
