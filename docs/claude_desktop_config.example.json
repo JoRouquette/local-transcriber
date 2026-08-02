@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "local-transcriber": {
+      "command": "C:\\Users\\<vous>\\AppData\\Local\\LocalTranscriber\\current\\LocalTranscriber.Mcp.exe",
+      "args": []
+    }
+  }
+}

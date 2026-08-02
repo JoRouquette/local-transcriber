@@ -1,0 +1,125 @@
+<Window x:Class="LocalTranscriber.Gui.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LocalTranscriber.Gui.ViewModels"
+        Title="LocalTranscriber — Configuration" Height="640" Width="900"
+        WindowStartupLocation="CenterScreen">
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+    <Window.Resources>
+        <Style TargetType="TextBlock" x:Key="Label">
+            <Setter Property="Margin" Value="0,8,0,2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+    </Window.Resources>
+
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom" Background="#F3F3F3" Padding="10">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Enregistrer" Command="{Binding SaveCommand}" FontWeight="Bold" />
+                <Button Content="Recharger" Command="{Binding ReloadCommand}" />
+                <TextBlock Text="{Binding ServiceStatus, StringFormat='Service : {0}'}"
+                           VerticalAlignment="Center" Margin="16,0,0,0" />
+            </StackPanel>
+        </Border>
+
+        <TabControl Margin="10">
+            <!-- Onglet General -->
+            <TabItem Header="Général">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="10">
+                        <TextBlock Text="Dossier surveillé (Inbox)" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Parcourir…" Command="{Binding BrowseWatchCommand}" />
+                            <TextBox Text="{Binding WatchRoot, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+
+                        <TextBlock Text="Dossier de sortie (Outputs)" Style="{StaticResource Label}" />
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Content="Parcourir…" Command="{Binding BrowseOutputCommand}" />
+                            <TextBox Text="{Binding OutputRoot, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+
+                        <TextBlock Text="Cache des modèles" Style="{StaticResource Label}" />
+                        <TextBox Text="{Binding ModelCacheDir, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <Separator Margin="0,14" />
+                        <TextBlock Text="Moteur (valeurs par défaut globales)" FontWeight="Bold" FontSize="14" />
+
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Modèle" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding ModelSizes}" SelectedItem="{Binding ModelSize}" />
+                                <TextBlock Text="Périphérique (device)" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding Device}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                <TextBlock Text="Type de calcul" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding ComputeTypes}" SelectedItem="{Binding ComputeType}" />
+                                <TextBlock Text="Langue" Style="{StaticResource Label}" />
+                                <ComboBox ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <CheckBox Content="Diarisation (qui parle quand)" IsChecked="{Binding DiarizationEnabled}" Margin="0,14,0,4" />
+                        <CheckBox Content="Identification des locuteurs par snippets de voix" IsChecked="{Binding SpeakerIdEnabled}" Margin="0,4" />
+                        <StackPanel Orientation="Horizontal" Margin="24,0,0,0">
+                            <TextBlock Text="Seuil de similarité :" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Width="60" Text="{Binding SpeakerThreshold}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- Onglet Projets -->
+            <TabItem Header="Projets">
+                <DockPanel Margin="10">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="Ajouter" Command="{Binding AddProjectCommand}" />
+                        <Button Content="Supprimer" Command="{Binding RemoveProjectCommand}" />
+                        <TextBlock Text="Les sous-dossiers du dossier surveillé. Vide = réglages globaux."
+                                   VerticalAlignment="Center" Foreground="#666" Margin="8,0,0,0" />
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding Projects}" SelectedItem="{Binding SelectedProject}"
+                              AutoGenerateColumns="False" CanUserAddRows="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Nom" Binding="{Binding Name}" Width="2*" />
+                            <DataGridTextColumn Header="Dossier (relatif)" Binding="{Binding RelativePath}" Width="3*" />
+                            <DataGridCheckBoxColumn Header="Actif" Binding="{Binding Enabled}" Width="Auto" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <!-- Onglet Service & File -->
+            <TabItem Header="Service &amp; File">
+                <DockPanel Margin="10">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button Content="Installer le service" Command="{Binding InstallServiceCommand}" />
+                        <Button Content="Démarrer" Command="{Binding StartServiceCommand}" />
+                        <Button Content="Arrêter" Command="{Binding StopServiceCommand}" />
+                        <Button Content="Rafraîchir l'état" Command="{Binding RefreshStatusCommand}" />
+                        <Button Content="Rafraîchir la file" Command="{Binding RefreshJobsCommand}" />
+                    </StackPanel>
+                    <DataGrid ItemsSource="{Binding Jobs}" AutoGenerateColumns="False" IsReadOnly="True">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />
+                            <DataGridTextColumn Header="Fichier" Binding="{Binding AudioPath}" Width="3*" />
+                            <DataGridTextColumn Header="Maj" Binding="{Binding UpdatedAt}" Width="Auto" />
+                            <DataGridTextColumn Header="Erreur" Binding="{Binding Error}" Width="2*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

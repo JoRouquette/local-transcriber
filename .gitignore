@@ -1,0 +1,32 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Python engine
+engine/.venv/
+engine/build/
+engine/dist/
+engine/__pycache__/
+**/__pycache__/
+*.pyc
+
+# Build output / packaging
+build/dist/
+build/publish/
+build/engine-dist/
+Releases/
+*.nupkg
+
+# Local runtime data (models cache, DB, logs, generated configs)
+data/
+models-cache/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Secrets / local config
+.env
+config.local.json

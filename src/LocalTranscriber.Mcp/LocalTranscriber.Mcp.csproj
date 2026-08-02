@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>LocalTranscriber.Mcp</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SDK MCP officiel C#. Verifiez/mettez a jour la version preview au moment du build :
+         dotnet add package ModelContextProtocol -->
+    <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LocalTranscriber.Core\LocalTranscriber.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,42 @@
+{
+  "watchRoot": "C:\\Transcriptions\\Inbox",
+  "outputRoot": "C:\\Transcriptions\\Outputs",
+  "modelCacheDir": "%LOCALAPPDATA%\\LocalTranscriber\\models",
+  "dataDir": "%LOCALAPPDATA%\\LocalTranscriber\\data",
+  "engineExecutable": "engine\\transcriber-engine.exe",
+  "fileTypes": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
+  "stabilizationSeconds": 5,
+  "maxParallelJobs": 1,
+  "engine": {
+    "modelSize": "large-v3",
+    "device": "auto",
+    "computeType": "auto",
+    "batchSize": 16,
+    "language": "auto"
+  },
+  "diarization": {
+    "enabled": true,
+    "minSpeakers": null,
+    "maxSpeakers": null
+  },
+  "speakerIdentification": {
+    "enabled": false,
+    "threshold": 0.55,
+    "voicesDirName": "voices"
+  },
+  "outputs": {
+    "markdown": true,
+    "json": true,
+    "srt": true,
+    "text": true
+  },
+  "projects": [
+    {
+      "name": "Exemple - Reunions",
+      "relativePath": "Reunions",
+      "enabled": true,
+      "engine": { "modelSize": "medium" },
+      "speakerIdentification": { "enabled": true, "voicesDirName": "voices" }
+    }
+  ]
+}

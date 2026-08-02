@@ -1,0 +1,16 @@
+# Moteur de transcription/diarisation (gele ensuite avec PyInstaller).
+# Installer PyTorch en amont selon la cible (voir README) :
+#   GPU CUDA 12.x :  pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   CPU seul      :  pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+whisperx>=3.1.1
+pyannote.audio>=3.1.1
+faster-whisper>=1.0.0
+ctranslate2>=4.0.0
+python-dotenv>=1.0.1
+srt>=3.5.3
+numpy>=1.26,<2.0
+soundfile>=0.12.1
+
+# Packaging
+pyinstaller>=6.6.0
