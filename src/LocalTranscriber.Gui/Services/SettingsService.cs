@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using LocalTranscriber.Core.Configuration;
+using LocalTranscriber.Core.Jobs;
 
 namespace LocalTranscriber.Gui.Services;
 
@@ -35,5 +37,12 @@ public sealed class SettingsService
         Projects.Clear();
         foreach (var p in Config.Projects) Projects.Add(p);
         Reloaded?.Invoke();
+    }
+
+    /// <summary>Empile une commande pour le service (retraiter un fichier / un projet).</summary>
+    public void EnqueueCommand(string type, string payload)
+    {
+        var db = Path.Combine(ConfigStore.ExpandPath(Config.DataDir), "commands.db");
+        new CommandStore(db).Enqueue(type, payload);
     }
 }

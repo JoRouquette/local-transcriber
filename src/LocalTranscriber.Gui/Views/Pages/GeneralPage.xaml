@@ -66,7 +66,7 @@
             </materialDesign:Card>
 
             <!-- Diarisation & locuteurs -->
-            <materialDesign:Card Padding="20" materialDesign:ElevationAssist.Elevation="Dp2">
+            <materialDesign:Card Padding="20" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp2">
                 <StackPanel>
                     <TextBlock Text="Diarisation &amp; locuteurs" FontSize="16" FontWeight="Medium" Margin="0,0,0,12" />
 
@@ -90,6 +90,34 @@
                                 Value="{Binding SpeakerThreshold}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding SpeakerThreshold, StringFormat=N2}" VerticalAlignment="Center" Margin="12,0,0,0" />
                     </StackPanel>
+                </StackPanel>
+            </materialDesign:Card>
+
+            <!-- Heures d'inactivité -->
+            <materialDesign:Card Padding="20" materialDesign:ElevationAssist.Elevation="Dp2">
+                <StackPanel>
+                    <TextBlock Text="Heures d'inactivité" FontSize="16" FontWeight="Medium" Margin="0,0,0,4" />
+                    <TextBlock Text="Aucune transcription n'est lancée pendant ces plages (la détection continue). Jours : mon,tue,wed,thu,fri,sat,sun — vide = tous les jours. Heures au format HH:mm (fin &lt; début = passe minuit)."
+                               Foreground="{DynamicResource MaterialDesignBodyLight}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12" />
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding AddQuietPeriodCommand}" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBlock Text="Ajouter une plage" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding RemoveQuietPeriodCommand}" Content="Supprimer" />
+                    </StackPanel>
+
+                    <DataGrid ItemsSource="{Binding QuietHours}" SelectedItem="{Binding SelectedQuietPeriod}"
+                              Style="{StaticResource MaterialDesignDataGrid}" AutoGenerateColumns="False" CanUserAddRows="False" MaxHeight="200">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Jours" Binding="{Binding DaysText, UpdateSourceTrigger=LostFocus}" Width="2*" />
+                            <DataGridTextColumn Header="Début" Binding="{Binding Start, UpdateSourceTrigger=LostFocus}" Width="*" />
+                            <DataGridTextColumn Header="Fin" Binding="{Binding End, UpdateSourceTrigger=LostFocus}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </StackPanel>
             </materialDesign:Card>
 

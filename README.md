@@ -98,9 +98,13 @@ Ensuite, depuis la GUI (onglet **Service & File**) : **Installer le service** pu
 
 Ouvrez **LocalTranscriber** (la GUI) :
 
-- **Général** : dossier surveillé, dossier de sortie, cache modèles, et réglages moteur par défaut (modèle, *device* `auto`/`cuda`/`cpu`, type de calcul, langue `auto`, diarisation, identification par snippets + seuil).
-- **Projets** : déclarez des sous-dossiers avec des réglages spécifiques (ex. un projet en modèle `medium`, un autre avec identification de locuteurs activée). Un fichier hors projet utilise les réglages globaux.
-- **Service & File** : installer/démarrer/arrêter le service, suivre la file d'attente et les erreurs.
+- **Général** : dossier surveillé, dossier de sortie, cache modèles, réglages moteur par défaut (modèle, *device* `auto`/`cuda`/`cpu`, type de calcul, langue `auto`, diarisation, identification par snippets + seuil), et les **heures d'inactivité** (plages jours + heures pendant lesquelles aucune transcription n'est lancée — la détection continue, le CPU lourd s'arrête).
+- **Projets** : déclarez des sous-dossiers avec des réglages spécifiques (ex. un projet en modèle `medium`, un autre avec identification de locuteurs activée). Un fichier hors projet utilise les réglages globaux. Bouton **(Re)traiter** pour re-mettre en file tous les audios d'un projet.
+- **Service & File** : installer/démarrer/arrêter le service, suivre la file d'attente et les erreurs, et **Retraiter** le fichier sélectionné (force son retraitement même s'il a déjà été transcrit).
+
+### Surveillance du dossier
+
+Le service **sonde** le dossier toutes les `stabilization_seconds` (5 s par défaut) : scan récursif, détection des fichiers **stables** (non modifiés depuis ce délai, non verrouillés), **empreinte de contenu** pour ne jamais retranscrire deux fois le même fichier. Les fichiers déjà vus et inchangés ne sont pas re-hachés (économie CPU). Pendant les **heures d'inactivité**, la détection/mise en file continue mais aucune transcription n'est lancée.
 
 **Enregistrer** écrit `config.json` dans `%PROGRAMDATA%\LocalTranscriber\` ; le service le recharge automatiquement.
 

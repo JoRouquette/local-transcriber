@@ -26,9 +26,14 @@ public sealed class Worker : BackgroundService
     private AppConfig _config = new();
     private DateTime _configMtime = DateTime.MinValue;
     private JobStore? _jobs;
+    private CommandStore? _commands;
     private PythonEngineRunner? _runner;
     private string? _hfToken;
     private string _enginePath = "";
+
+    // Cache (chemin -> taille+date) pour eviter de re-hasher les fichiers inchanges a chaque scan.
+    private readonly Dictionary<string, (long Size, long Mtime)> _seen = new(StringComparer.OrdinalIgnoreCase);
+    private bool _quietLogged;
 
     public Worker(ILogger<Worker> logger, TranscriptIndex index, VectorStore vectors, EmbeddingClient embedder)
     {
@@ -58,13 +63,27 @@ public sealed class Worker : BackgroundService
                     await _sidecar.EnsureStartedAsync(_enginePath, _config.EmbeddingSidecarPort,
                         ConfigStore.ExpandPath(_config.ModelCacheDir), _config.EmbeddingDevice, stoppingToken);
 
+                DrainCommands();
                 ScanAndEnqueue();
-                await ProcessQueueAsync(stoppingToken);
 
                 var outputRoot = ConfigStore.ExpandPath(_config.OutputRoot);
-                _index.Refresh(outputRoot);
-                if (_config.SemanticEnabled)
-                    await ReconcileVectorsAsync(outputRoot, 5, stoppingToken);
+                _index.Refresh(outputRoot); // rafraichissement FTS (leger), meme en inactivite
+
+                if (_config.IsQuietNow(DateTime.Now))
+                {
+                    if (!_quietLogged)
+                    {
+                        _logger.LogInformation("Heures d'inactivite : traitement en pause (detection/mise en file maintenues).");
+                        _quietLogged = true;
+                    }
+                }
+                else
+                {
+                    _quietLogged = false;
+                    await ProcessQueueAsync(stoppingToken);
+                    if (_config.SemanticEnabled)
+                        await ReconcileVectorsAsync(outputRoot, 5, stoppingToken);
+                }
             }
             catch (OperationCanceledException) { break; }
             catch (Exception ex)
@@ -93,6 +112,8 @@ public sealed class Worker : BackgroundService
         Directory.CreateDirectory(dataDir);
         _jobs = new JobStore(Path.Combine(dataDir, "jobs.db"));
         _jobs.RequeueStale();
+        _commands = new CommandStore(Path.Combine(dataDir, "commands.db"));
+        _seen.Clear();
 
         _enginePath = ResolveEnginePath(_config.EngineExecutable);
         _hfToken = LoadHfToken();
@@ -143,6 +164,13 @@ public sealed class Worker : BackgroundService
         {
             if (!extensions.Contains(Path.GetExtension(file))) continue;
             if (file.Split(Path.DirectorySeparatorChar).Any(seg => voicesDirNames.Contains(seg))) continue;
+
+            FileInfo info;
+            try { info = new FileInfo(file); } catch { continue; }
+            var key = (info.Length, info.LastWriteTimeUtc.Ticks);
+            // Deja pris en compte et inchange -> on evite de re-hasher (economie CPU/IO).
+            if (_seen.TryGetValue(file, out var prev) && prev == key) continue;
+
             if (!IsStable(file)) continue;
 
             var project = PathResolver.FindProject(_config, file);
@@ -151,12 +179,47 @@ public sealed class Worker : BackgroundService
             try
             {
                 var hash = FileHasher.QuickHash(file);
-                if (_jobs.AlreadyKnown(hash)) continue;
-                var outputDir = PathResolver.ResolveOutputDir(watchRoot, outputRoot, file);
-                _jobs.Enqueue(file, hash, outputDir, PathResolver.BaseName(file));
-                _logger.LogInformation("En file : {File}", file);
+                if (!_jobs.AlreadyKnown(hash))
+                {
+                    var outputDir = PathResolver.ResolveOutputDir(watchRoot, outputRoot, file);
+                    _jobs.Enqueue(file, hash, outputDir, PathResolver.BaseName(file));
+                    _logger.LogInformation("En file : {File}", file);
+                }
+                _seen[file] = key; // memorise (connu ou nouvellement enfile) pour ne plus re-hasher
             }
             catch (IOException) { /* encore en ecriture */ }
+        }
+    }
+
+    /// <summary>Applique les commandes de la GUI (retraiter un fichier / un projet).</summary>
+    private void DrainCommands()
+    {
+        if (_commands is null || _jobs is null) return;
+        var watchRoot = ConfigStore.ExpandPath(_config.WatchRoot);
+
+        foreach (var cmd in _commands.Drain())
+        {
+            try
+            {
+                if (cmd.Type == CommandTypes.ReprocessFile && !string.IsNullOrWhiteSpace(cmd.Payload))
+                {
+                    _jobs.DeleteByPath(cmd.Payload);
+                    _seen.Remove(cmd.Payload);
+                    _logger.LogInformation("Retraitement demande : {File}", cmd.Payload);
+                }
+                else if (cmd.Type == CommandTypes.ReprocessProject)
+                {
+                    var dir = Path.GetFullPath(Path.Combine(watchRoot, cmd.Payload));
+                    _jobs.DeleteUnderPath(dir);
+                    foreach (var k in _seen.Keys.Where(k => k.StartsWith(dir, StringComparison.OrdinalIgnoreCase)).ToList())
+                        _seen.Remove(k);
+                    _logger.LogInformation("Retraitement du projet demande : {Dir}", dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Commande ignoree : {Type}", cmd.Type);
+            }
         }
     }
 

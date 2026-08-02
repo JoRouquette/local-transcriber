@@ -46,5 +46,9 @@
       "engine": { "model_size": "medium" },
       "speaker_identification": { "enabled": true, "voices_dir_name": "voices" }
     }
+  ],
+  "quiet_hours": [
+    { "days": [ "mon", "tue", "wed", "thu", "fri" ], "start": "20:00", "end": "07:00" },
+    { "days": [ "sat", "sun" ], "start": "00:00", "end": "23:59" }
   ]
 }

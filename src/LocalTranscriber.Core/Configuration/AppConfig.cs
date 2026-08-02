@@ -50,6 +50,19 @@ public sealed class ProjectConfig
     public OutputConfig? Outputs { get; set; }
 }
 
+/// <summary>Plage d'inactivite : le service ne lance aucune transcription pendant cette fenetre.</summary>
+public sealed class QuietPeriod
+{
+    /// <summary>Jours concernes ("mon","tue","wed","thu","fri","sat","sun"). Vide = tous les jours.</summary>
+    public List<string> Days { get; set; } = new();
+
+    /// <summary>Heure de debut, format "HH:mm".</summary>
+    public string Start { get; set; } = "22:00";
+
+    /// <summary>Heure de fin, format "HH:mm". Si End &lt; Start, la plage passe minuit.</summary>
+    public string End { get; set; } = "06:00";
+}
+
 /// <summary>Reglages effectifs pour un projet donne, apres fusion avec le global.</summary>
 public sealed record EffectiveSettings(
     EngineConfig Engine,
@@ -96,10 +109,52 @@ public sealed class AppConfig
 
     public List<ProjectConfig> Projects { get; set; } = new();
 
+    /// <summary>Plages d'inactivite pendant lesquelles aucune transcription n'est lancee.</summary>
+    public List<QuietPeriod> QuietHours { get; set; } = new();
+
     /// <summary>Fusionne les reglages globaux avec les surcharges d'un projet.</summary>
     public EffectiveSettings EffectiveFor(ProjectConfig? project) => new(
         project?.Engine ?? Engine,
         project?.Diarization ?? Diarization,
         project?.SpeakerIdentification ?? SpeakerIdentification,
         project?.Outputs ?? Outputs);
+
+    /// <summary>Indique si l'instant donne tombe dans une plage d'inactivite.</summary>
+    public bool IsQuietNow(DateTime now)
+    {
+        var t = TimeOnly.FromDateTime(now);
+        var today = DayKey(now.DayOfWeek);
+        var yesterday = DayKey(now.AddDays(-1).DayOfWeek);
+
+        foreach (var p in QuietHours)
+        {
+            if (!TimeOnly.TryParse(p.Start, out var s) || !TimeOnly.TryParse(p.End, out var e))
+                continue;
+
+            bool allDays = p.Days is null || p.Days.Count == 0;
+            bool DayIn(string d) => allDays || p.Days!.Any(x => string.Equals(x, d, StringComparison.OrdinalIgnoreCase));
+
+            if (s <= e)
+            {
+                if (DayIn(today) && t >= s && t < e) return true;
+            }
+            else // passe minuit : [s,24h) le jour de debut, [0,e) le lendemain
+            {
+                if (DayIn(today) && t >= s) return true;
+                if (DayIn(yesterday) && t < e) return true;
+            }
+        }
+        return false;
+    }
+
+    private static string DayKey(DayOfWeek d) => d switch
+    {
+        DayOfWeek.Monday => "mon",
+        DayOfWeek.Tuesday => "tue",
+        DayOfWeek.Wednesday => "wed",
+        DayOfWeek.Thursday => "thu",
+        DayOfWeek.Friday => "fri",
+        DayOfWeek.Saturday => "sat",
+        _ => "sun",
+    };
 }

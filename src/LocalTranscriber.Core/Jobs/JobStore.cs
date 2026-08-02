@@ -148,6 +148,29 @@ public sealed class JobStore
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Oublie le job d'un fichier (pour forcer son retraitement au prochain scan).</summary>
+    public int DeleteByPath(string audioPath)
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "DELETE FROM jobs WHERE audio_path = $p";
+        cmd.Parameters.AddWithValue("$p", audioPath);
+        return cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Oublie tous les jobs dont le fichier est sous un dossier (retraitement d'un projet).</summary>
+    public int DeleteUnderPath(string directory)
+    {
+        var prefix = directory.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        // ESCAPE '~' : les chemins Windows contiennent des '\', on ne peut pas l'utiliser.
+        cmd.CommandText = "DELETE FROM jobs WHERE audio_path LIKE $pfx ESCAPE '~'";
+        var escaped = prefix.Replace("~", "~~").Replace("%", "~%").Replace("_", "~_");
+        cmd.Parameters.AddWithValue("$pfx", escaped + "%");
+        return cmd.ExecuteNonQuery();
+    }
+
     public IReadOnlyList<TranscriptionJob> ListRecent(int limit = 100)
     {
         using var c = Open();

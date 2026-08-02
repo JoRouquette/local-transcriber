@@ -33,6 +33,15 @@ public sealed partial class ServiceViewModel : ObservableObject
 
     [ObservableProperty] private string _serviceStatus = "…";
     [ObservableProperty] private bool _isRunning;
+    [ObservableProperty] private TranscriptionJob? _selectedJob;
+
+    [RelayCommand]
+    private void ReprocessFile()
+    {
+        if (SelectedJob is null) return;
+        _settings.EnqueueCommand(CommandTypes.ReprocessFile, SelectedJob.AudioPath);
+        _snackbar.Enqueue($"Retraitement demandé : {Path.GetFileName(SelectedJob.AudioPath)}");
+    }
 
     [RelayCommand]
     private async Task InstallService()

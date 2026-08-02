@@ -49,12 +49,20 @@
                     <Button Style="{StaticResource MaterialDesignIconButton}" Command="{Binding RefreshCommand}" ToolTip="Rafraîchir">
                         <materialDesign:PackIcon Kind="Refresh" />
                     </Button>
+                    <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding ReprocessFileCommand}"
+                            ToolTip="Retraiter le fichier sélectionné dans la liste ci-dessous" Margin="8,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="Retraiter" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </DockPanel>
         </materialDesign:Card>
 
         <materialDesign:Card Grid.Row="2" materialDesign:ElevationAssist.Elevation="Dp2">
-            <DataGrid ItemsSource="{Binding Jobs}" Style="{StaticResource MaterialDesignDataGrid}"
+            <DataGrid ItemsSource="{Binding Jobs}" SelectedItem="{Binding SelectedJob}"
+                      Style="{StaticResource MaterialDesignDataGrid}"
                       AutoGenerateColumns="False" IsReadOnly="True">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />

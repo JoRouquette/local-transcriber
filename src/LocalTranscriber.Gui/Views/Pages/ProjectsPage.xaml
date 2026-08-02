@@ -27,6 +27,14 @@
                     <TextBlock Text="Supprimer" VerticalAlignment="Center" />
                 </StackPanel>
             </Button>
+            <Button DockPanel.Dock="Left" Style="{StaticResource MaterialDesignFlatButton}"
+                    Command="{Binding ReprocessProjectCommand}" Margin="8,0,0,0"
+                    ToolTip="Re-mettre en file tous les audios du projet sélectionné">
+                <StackPanel Orientation="Horizontal">
+                    <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="(Re)traiter" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
             <TextBlock Text="Sous-dossiers du dossier surveillé, avec réglages spécifiques."
                        VerticalAlignment="Center" Margin="16,0,0,0"
                        Foreground="{DynamicResource MaterialDesignBodyLight}" />

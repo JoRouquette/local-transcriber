@@ -1,5 +1,7 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalTranscriber.Core.Configuration;
@@ -58,6 +60,29 @@ public sealed partial class GeneralViewModel : ObservableValidator
         get { ValidateAllProperties(); return !HasErrors; }
     }
 
+    // ---- Heures d'inactivite ----
+    public ObservableCollection<QuietPeriodRow> QuietHours { get; } = new();
+
+    [ObservableProperty] private QuietPeriodRow? _selectedQuietPeriod;
+
+    [RelayCommand]
+    private void AddQuietPeriod()
+    {
+        var p = new QuietPeriod { Days = new(), Start = "22:00", End = "06:00" };
+        C.QuietHours.Add(p);
+        var row = new QuietPeriodRow(p);
+        QuietHours.Add(row);
+        SelectedQuietPeriod = row;
+    }
+
+    [RelayCommand]
+    private void RemoveQuietPeriod()
+    {
+        if (SelectedQuietPeriod is null) return;
+        C.QuietHours.Remove(SelectedQuietPeriod.Model);
+        QuietHours.Remove(SelectedQuietPeriod);
+    }
+
     private void LoadFromConfig()
     {
         WatchRoot = C.WatchRoot;
@@ -71,6 +96,10 @@ public sealed partial class GeneralViewModel : ObservableValidator
         SpeakerIdEnabled = C.SpeakerIdentification.Enabled;
         SpeakerThreshold = C.SpeakerIdentification.Threshold;
         HfToken = C.HfToken ?? "";
+
+        QuietHours.Clear();
+        foreach (var p in C.QuietHours) QuietHours.Add(new QuietPeriodRow(p));
+
         ValidateAllProperties();
     }
 
