@@ -71,7 +71,23 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     model = whisperx.load_model(
         req.model_size, device, compute_type=compute_type, language=lang, download_root=cache
     )
-    tr = model.transcribe(audio, batch_size=req.batch_size, language=lang)
+    threshold_seconds = float(getattr(req, "chunk_threshold_minutes", 20)) * 60.0
+    if getattr(req, "chunking_enabled", False) and duration > threshold_seconds:
+        import sys as _sys
+
+        from . import chunking
+
+        tr = chunking.chunked_transcribe(
+            model,
+            audio,
+            batch_size=req.batch_size,
+            language=lang,
+            target_seconds=float(req.chunk_minutes) * 60.0,
+            min_silence_seconds=float(req.chunk_min_silence_seconds),
+            log=lambda m: print(m, file=_sys.stderr, flush=True),
+        )
+    else:
+        tr = model.transcribe(audio, batch_size=req.batch_size, language=lang)
     detected_lang = tr.get("language", req.language)
 
     # 2. Alignement (timestamps au mot)

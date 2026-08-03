@@ -1,68 +1,112 @@
-<UserControl x:Class="LocalTranscriber.Gui.Views.Pages.AboutPage"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
-    <UserControl.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis" />
-    </UserControl.Resources>
-    <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
-        <StackPanel MaxWidth="700" HorizontalAlignment="Left">
-
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                <materialDesign:PackIcon Kind="Microphone" Width="44" Height="44" VerticalAlignment="Center"
-                                         Foreground="{DynamicResource PrimaryHueMidBrush}" />
-                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="LocalTranscriber" FontSize="22" FontWeight="Medium" />
-                    <TextBlock Text="{Binding Version, StringFormat=Version {0}}"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}" />
-                </StackPanel>
-            </StackPanel>
-
-            <TextBlock TextWrapping="Wrap" Margin="0,0,0,16"
-                       Text="Transcription et diarisation locales et gratuites : surveille un dossier, transcrit/diarise les audios, indexe les sorties (recherche hybride) et les expose à Claude Desktop via un serveur MCP." />
-
-            <materialDesign:Card Padding="16" materialDesign:ElevationAssist.Elevation="Dp2" Margin="0,0,0,16">
-                <StackPanel>
-                    <TextBlock Text="Mises à jour" FontWeight="Medium" />
-                    <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" Margin="0,4,0,0"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}" />
-
-                    <ProgressBar Style="{StaticResource MaterialDesignLinearProgressBar}" IsIndeterminate="True"
-                                 Margin="0,8,0,0"
-                                 Visibility="{Binding IsCheckingUpdate, Converter={StaticResource BoolToVis}}" />
-
-                    <CheckBox Content="Installer automatiquement les mises à jour"
-                              IsChecked="{Binding AutoInstallUpdates}" Margin="0,10,0,0" />
-                    <TextBlock Text="Décoché : l'application vous prévient et attend que vous cliquiez sur « Installer et redémarrer »."
-                               TextWrapping="Wrap" FontSize="11" Margin="0,2,0,0"
-                               Foreground="{DynamicResource MaterialDesignBodyLight}" />
-
-                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                        <Button Style="{StaticResource MaterialDesignOutlinedButton}"
-                                Command="{Binding CheckForUpdatesCommand}"
-                                IsEnabled="{Binding IsNotChecking}"
-                                Content="Rechercher les mises à jour" />
-                        <Button Style="{StaticResource MaterialDesignRaisedButton}" Margin="8,0,0,0"
-                                Command="{Binding InstallUpdateCommand}"
-                                Visibility="{Binding UpdateReady, Converter={StaticResource BoolToVis}}"
-                                Content="Installer et redémarrer" />
-                    </StackPanel>
-                </StackPanel>
-            </materialDesign:Card>
-
-            <materialDesign:Card Padding="16" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <TextBlock Text="Endpoint MCP (HTTP local)" FontWeight="Medium" />
-                    <Button Style="{StaticResource MaterialDesignFlatButton}" HorizontalAlignment="Left" Padding="0,4"
-                            Command="{Binding OpenMcpCommand}" Content="{Binding McpEndpoint}" />
-
-                    <Separator Margin="0,8" />
-
-                    <TextBlock Text="Dépôt du projet" FontWeight="Medium" />
-                    <Button Style="{StaticResource MaterialDesignFlatButton}" HorizontalAlignment="Left" Padding="0,4"
-                            Command="{Binding OpenRepositoryCommand}" Content="{Binding RepositoryUrl}" />
-                </StackPanel>
-            </materialDesign:Card>
+<UserControl
+  x:Class="LocalTranscriber.Gui.Views.Pages.AboutPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+>
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </UserControl.Resources>
+  <ScrollViewer Padding="24" VerticalScrollBarVisibility="Auto">
+    <StackPanel MaxWidth="700" HorizontalAlignment="Left">
+      <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+        <materialDesign:PackIcon
+          Kind="Microphone"
+          Width="44"
+          Height="44"
+          VerticalAlignment="Center"
+          Foreground="{DynamicResource PrimaryHueMidBrush}"
+        />
+        <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="LocalTranscriber" FontSize="22" FontWeight="Medium" />
+          <TextBlock
+            Text="{Binding Version, StringFormat=Version {0}}"
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+          />
         </StackPanel>
-    </ScrollViewer>
+      </StackPanel>
+
+      <TextBlock
+        TextWrapping="Wrap"
+        Margin="0,0,0,16"
+        Text="Transcription et diarisation locales et gratuites : surveille un dossier, transcrit/diarise les audios, indexe les sorties (recherche hybride) et les expose à Claude Desktop via un serveur MCP."
+      />
+
+      <materialDesign:Card
+        Padding="16"
+        materialDesign:ElevationAssist.Elevation="Dp2"
+        Margin="0,0,0,16"
+      >
+        <StackPanel>
+          <TextBlock Text="Mises à jour" FontWeight="Medium" />
+          <TextBlock
+            Text="{Binding UpdateStatus}"
+            TextWrapping="Wrap"
+            Margin="0,4,0,0"
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+          />
+
+          <ProgressBar
+            Style="{StaticResource MaterialDesignLinearProgressBar}"
+            IsIndeterminate="True"
+            Margin="0,8,0,0"
+            Visibility="{Binding IsCheckingUpdate, Converter={StaticResource BoolToVis}}"
+          />
+
+          <CheckBox
+            Content="Installer automatiquement les mises à jour"
+            IsChecked="{Binding AutoInstallUpdates}"
+            Margin="0,10,0,0"
+          />
+          <TextBlock
+            Text="Décoché : l'application vous prévient et attend que vous cliquiez sur « Installer et redémarrer »."
+            TextWrapping="Wrap"
+            FontSize="11"
+            Margin="0,2,0,0"
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+          />
+
+          <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+            <Button
+              Style="{StaticResource MaterialDesignOutlinedButton}"
+              Command="{Binding CheckForUpdatesCommand}"
+              IsEnabled="{Binding IsNotChecking}"
+              Content="Rechercher les mises à jour"
+            />
+            <Button
+              Style="{StaticResource MaterialDesignRaisedButton}"
+              Margin="8,0,0,0"
+              Command="{Binding InstallUpdateCommand}"
+              Visibility="{Binding UpdateReady, Converter={StaticResource BoolToVis}}"
+              Content="Installer et redémarrer"
+            />
+          </StackPanel>
+        </StackPanel>
+      </materialDesign:Card>
+
+      <materialDesign:Card Padding="16" materialDesign:ElevationAssist.Elevation="Dp2">
+        <StackPanel>
+          <TextBlock Text="Endpoint MCP (HTTP local)" FontWeight="Medium" />
+          <Button
+            Style="{StaticResource MaterialDesignFlatButton}"
+            HorizontalAlignment="Left"
+            Padding="0,4"
+            Command="{Binding OpenMcpCommand}"
+            Content="{Binding McpEndpoint}"
+          />
+
+          <Separator Margin="0,8" />
+
+          <TextBlock Text="Dépôt du projet" FontWeight="Medium" />
+          <Button
+            Style="{StaticResource MaterialDesignFlatButton}"
+            HorizontalAlignment="Left"
+            Padding="0,4"
+            Command="{Binding OpenRepositoryCommand}"
+            Content="{Binding RepositoryUrl}"
+          />
+        </StackPanel>
+      </materialDesign:Card>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

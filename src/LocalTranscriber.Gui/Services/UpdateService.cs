@@ -18,7 +18,8 @@ public sealed class UpdateService
     {
         // Repo public → pas de token. prerelease=false : on ne prend que les releases stables.
         _mgr = new UpdateManager(
-            new GithubSource("https://github.com/JoRouquette/local-transcriber", null, false));
+            new GithubSource("https://github.com/JoRouquette/local-transcriber", null, false)
+        );
     }
 
     /// <summary>Vrai uniquement pour une app réellement installée (pas en développement).</summary>
@@ -32,7 +33,8 @@ public sealed class UpdateService
     /// </summary>
     public async Task<string?> CheckAndDownloadAsync()
     {
-        if (!_mgr.IsInstalled) return null;
+        if (!_mgr.IsInstalled)
+            return null;
 
         var info = await _mgr.CheckForUpdatesAsync();
         if (info is null)
@@ -49,12 +51,14 @@ public sealed class UpdateService
     /// <summary>Applique la mise à jour téléchargée et redémarre immédiatement l'application.</summary>
     public void ApplyAndRestart()
     {
-        if (_pending is not null) _mgr.ApplyUpdatesAndRestart(_pending);
+        if (_pending is not null)
+            _mgr.ApplyUpdatesAndRestart(_pending);
     }
 
     /// <summary>Programme l'installation de la mise à jour à la prochaine fermeture (non intrusif).</summary>
     public void ApplyOnExit()
     {
-        if (_pending is not null) _mgr.WaitExitThenApplyUpdates(_pending);
+        if (_pending is not null)
+            _mgr.WaitExitThenApplyUpdates(_pending);
     }
 }

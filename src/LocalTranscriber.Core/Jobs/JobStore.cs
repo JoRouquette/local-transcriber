@@ -2,6 +2,17 @@ using Microsoft.Data.Sqlite;
 
 namespace LocalTranscriber.Core.Jobs;
 
+/// <summary>Instantané de la file d'attente pour le monitoring de l'interface.</summary>
+public sealed record JobSummary(
+    int Pending,
+    int Processing,
+    int Done,
+    int Failed,
+    string? CurrentFile,
+    string? LastError,
+    string? LastErrorFile
+);
+
 /// <summary>
 /// File de traitement persistante (SQLite). Restart-safe et idempotente : un fichier
 /// deja transcrit (meme hash) n'est jamais retraite. Partagee par le service ; la GUI
@@ -59,7 +70,8 @@ public sealed class JobStore
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done')";
+        cmd.CommandText =
+            "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done')";
         cmd.Parameters.AddWithValue("$h", fileHash);
         return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
@@ -91,12 +103,14 @@ public sealed class JobStore
         using var tx = c.BeginTransaction();
         using var sel = c.CreateCommand();
         sel.Transaction = tx;
-        sel.CommandText = "SELECT id, audio_path, file_hash, output_dir, base_name, attempts FROM jobs WHERE status='Pending' ORDER BY id LIMIT 1";
+        sel.CommandText =
+            "SELECT id, audio_path, file_hash, output_dir, base_name, attempts FROM jobs WHERE status='Pending' ORDER BY id LIMIT 1";
         long id;
         TranscriptionJob job;
         using (var r = sel.ExecuteReader())
         {
-            if (!r.Read()) return null;
+            if (!r.Read())
+                return null;
             id = r.GetInt64(0);
             job = new TranscriptionJob
             {
@@ -112,7 +126,8 @@ public sealed class JobStore
 
         using var upd = c.CreateCommand();
         upd.Transaction = tx;
-        upd.CommandText = "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now WHERE id=$id";
+        upd.CommandText =
+            "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now WHERE id=$id";
         upd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
         upd.Parameters.AddWithValue("$id", id);
         upd.ExecuteNonQuery();
@@ -120,18 +135,17 @@ public sealed class JobStore
         return job;
     }
 
-    public void MarkDone(long id)
-        => SetStatus(id, JobStatus.Done, null);
+    public void MarkDone(long id) => SetStatus(id, JobStatus.Done, null);
 
-    public void MarkFailed(long id, string error)
-        => SetStatus(id, JobStatus.Failed, error);
+    public void MarkFailed(long id, string error) => SetStatus(id, JobStatus.Failed, error);
 
     /// <summary>Repasse en Pending les jobs restes Processing (ex. apres un crash du service).</summary>
     public int RequeueStale()
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Processing'";
+        cmd.CommandText =
+            "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Processing'";
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
         return cmd.ExecuteNonQuery();
     }
@@ -171,29 +185,76 @@ public sealed class JobStore
         return cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Résumé de la file pour le monitoring (compteurs + fichier en cours + dernière erreur).</summary>
+    public JobSummary Summarize()
+    {
+        using var c = Open();
+        var counts = new Dictionary<string, int>();
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "SELECT status, COUNT(*) FROM jobs GROUP BY status";
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+                counts[r.GetString(0)] = r.GetInt32(1);
+        }
+        string? current;
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText =
+                "SELECT audio_path FROM jobs WHERE status='Processing' ORDER BY updated_at DESC LIMIT 1";
+            current = cmd.ExecuteScalar() as string;
+        }
+        string? lastErr = null,
+            lastErrFile = null;
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText =
+                "SELECT audio_path, error FROM jobs WHERE status='Failed' AND error IS NOT NULL ORDER BY updated_at DESC LIMIT 1";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                lastErrFile = r.GetString(0);
+                lastErr = r.GetString(1);
+            }
+        }
+        int Get(string s) => counts.TryGetValue(s, out var n) ? n : 0;
+        return new JobSummary(
+            Get("Pending"),
+            Get("Processing"),
+            Get("Done"),
+            Get("Failed"),
+            current,
+            lastErr,
+            lastErrFile
+        );
+    }
+
     public IReadOnlyList<TranscriptionJob> ListRecent(int limit = 100)
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts FROM jobs ORDER BY id DESC LIMIT $l";
+        cmd.CommandText =
+            "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts FROM jobs ORDER BY id DESC LIMIT $l";
         cmd.Parameters.AddWithValue("$l", limit);
         var list = new List<TranscriptionJob>();
         using var r = cmd.ExecuteReader();
         while (r.Read())
         {
-            list.Add(new TranscriptionJob
-            {
-                Id = r.GetInt64(0),
-                AudioPath = r.GetString(1),
-                FileHash = r.GetString(2),
-                OutputDir = r.GetString(3),
-                BaseName = r.GetString(4),
-                Status = Enum.Parse<JobStatus>(r.GetString(5)),
-                CreatedAt = DateTime.Parse(r.GetString(6)),
-                UpdatedAt = DateTime.Parse(r.GetString(7)),
-                Error = r.IsDBNull(8) ? null : r.GetString(8),
-                Attempts = r.GetInt32(9),
-            });
+            list.Add(
+                new TranscriptionJob
+                {
+                    Id = r.GetInt64(0),
+                    AudioPath = r.GetString(1),
+                    FileHash = r.GetString(2),
+                    OutputDir = r.GetString(3),
+                    BaseName = r.GetString(4),
+                    Status = Enum.Parse<JobStatus>(r.GetString(5)),
+                    CreatedAt = DateTime.Parse(r.GetString(6)),
+                    UpdatedAt = DateTime.Parse(r.GetString(7)),
+                    Error = r.IsDBNull(8) ? null : r.GetString(8),
+                    Attempts = r.GetInt32(9),
+                }
+            );
         }
         return list;
     }

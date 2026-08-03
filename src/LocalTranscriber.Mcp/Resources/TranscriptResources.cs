@@ -22,11 +22,17 @@ public sealed class TranscriptResources
         _guard = new PathGuard(output.OutputRoot);
     }
 
-    [McpServerResource(UriTemplate = "transcript://{project}/{name}", Name = "transcript", MimeType = "text/markdown")]
+    [McpServerResource(
+        UriTemplate = "transcript://{project}/{name}",
+        Name = "transcript",
+        MimeType = "text/markdown"
+    )]
     [Description("Transcription Markdown d'un fichier, adressee par projet et nom de base.")]
     public string Read(
-        [Description("Nom du projet (dossier de premier niveau sous la racine de sortie).")] string project,
-        [Description("Nom de base du fichier, sans extension.")] string name)
+        [Description("Nom du projet (dossier de premier niveau sous la racine de sortie).")]
+            string project,
+        [Description("Nom de base du fichier, sans extension.")] string name
+    )
     {
         var md = Path.Combine(_output.OutputRoot, project, name + ".md");
         var resolved = _guard.Resolve(md);

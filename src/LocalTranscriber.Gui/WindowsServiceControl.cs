@@ -32,13 +32,21 @@ public static class WindowsServiceControl
     /// <summary>Cree (ou remplace) la tache planifiee et la demarre immediatement.</summary>
     public static void Install()
     {
-        var exe = ServiceExePath ?? throw new FileNotFoundException("LocalTranscriber.Service.exe introuvable.");
+        var exe =
+            ServiceExePath
+            ?? throw new FileNotFoundException("LocalTranscriber.Service.exe introuvable.");
         var user = WindowsIdentity.GetCurrent().Name; // DOMAINE\Utilisateur
         var xmlPath = Path.Combine(Path.GetTempPath(), "localtranscriber-task.xml");
         // schtasks /XML exige un fichier UTF-16.
         File.WriteAllText(xmlPath, BuildTaskXml(exe, user), new UnicodeEncoding());
         Run("schtasks.exe", $"/Create /TN \"{TaskName}\" /XML \"{xmlPath}\" /F");
-        try { File.Delete(xmlPath); } catch { /* sans importance */ }
+        try
+        {
+            File.Delete(xmlPath);
+        }
+        catch
+        { /* sans importance */
+        }
         Start();
     }
 
@@ -59,7 +67,8 @@ public static class WindowsServiceControl
     {
         try
         {
-            if (Process.GetProcessesByName(ProcessName).Length > 0) return "En cours d'execution";
+            if (Process.GetProcessesByName(ProcessName).Length > 0)
+                return "En cours d'execution";
             return TaskExists() ? "Arrete" : "Non installe";
         }
         catch (Exception ex)

@@ -22,8 +22,7 @@ public static class PathResolver
         return Path.GetFullPath(Path.Combine(outputRoot, relDir));
     }
 
-    public static string BaseName(string audioPath) =>
-        Path.GetFileNameWithoutExtension(audioPath);
+    public static string BaseName(string audioPath) => Path.GetFileNameWithoutExtension(audioPath);
 
     /// <summary>
     /// Retrouve le projet dont le <c>RelativePath</c> prefixe le fichier (correspondance
@@ -37,8 +36,12 @@ public static class PathResolver
         foreach (var p in config.Projects)
         {
             var pp = p.RelativePath.Replace('\\', '/').Trim('/');
-            if (pp.Length == 0) continue;
-            if ((rel + "/").StartsWith(pp + "/", StringComparison.OrdinalIgnoreCase) && pp.Length > bestLen)
+            if (pp.Length == 0)
+                continue;
+            if (
+                (rel + "/").StartsWith(pp + "/", StringComparison.OrdinalIgnoreCase)
+                && pp.Length > bestLen
+            )
             {
                 best = p;
                 bestLen = pp.Length;
@@ -48,7 +51,11 @@ public static class PathResolver
     }
 
     /// <summary>Dossier des snippets de voix pour un projet, s'il existe.</summary>
-    public static string? ResolveVoicesDir(AppConfig config, ProjectConfig? project, string voicesDirName)
+    public static string? ResolveVoicesDir(
+        AppConfig config,
+        ProjectConfig? project,
+        string voicesDirName
+    )
     {
         if (project is null || string.IsNullOrWhiteSpace(voicesDirName))
             return null;

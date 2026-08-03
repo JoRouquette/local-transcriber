@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
+    <!-- WinExe = sous-systeme Windows : aucune fenetre console quand la tache de fond
+         lance le worker (l'hote ASP.NET tourne headless ; les logs vont dans l'EventLog
+         et la base de jobs, lus par la GUI pour le monitoring). -->
+    <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -19,5 +22,4 @@
     <ProjectReference Include="..\LocalTranscriber.Core\LocalTranscriber.Core.csproj" />
     <ProjectReference Include="..\LocalTranscriber.Mcp\LocalTranscriber.Mcp.csproj" />
   </ItemGroup>
-
 </Project>

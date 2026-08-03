@@ -22,7 +22,11 @@ public sealed class EmbeddingClient
         _timeoutMs = timeoutMs;
     }
 
-    public async Task<EmbedResponse> EmbedAsync(IEnumerable<string> texts, string kind, CancellationToken ct = default)
+    public async Task<EmbedResponse> EmbedAsync(
+        IEnumerable<string> texts,
+        string kind,
+        CancellationToken ct = default
+    )
     {
         var request = new EmbedRequest { Texts = texts.ToList(), Kind = kind };
         try
@@ -44,7 +48,7 @@ public sealed class EmbeddingClient
                 return new EmbedResponse { Error = "Reponse vide du sidecar." };
 
             return JsonSerializer.Deserialize<EmbedResponse>(line, JsonDefaults.Options)
-                   ?? new EmbedResponse { Error = "Reponse illisible du sidecar." };
+                ?? new EmbedResponse { Error = "Reponse illisible du sidecar." };
         }
         catch (Exception ex)
         {
@@ -53,7 +57,11 @@ public sealed class EmbeddingClient
     }
 
     /// <summary>Embedding d'un seul texte (renvoie null en cas d'echec).</summary>
-    public async Task<float[]?> EmbedOneAsync(string text, string kind, CancellationToken ct = default)
+    public async Task<float[]?> EmbedOneAsync(
+        string text,
+        string kind,
+        CancellationToken ct = default
+    )
     {
         var resp = await EmbedAsync(new[] { text }, kind, ct);
         return resp.IsSuccess ? resp.Vectors[0] : null;
@@ -66,7 +74,8 @@ public sealed class EmbeddingClient
         while (true)
         {
             var read = await stream.ReadAsync(buffer, ct);
-            if (read == 0) break;
+            if (read == 0)
+                break;
             var chunk = Encoding.UTF8.GetString(buffer, 0, read);
             var nl = chunk.IndexOf('\n');
             if (nl >= 0)

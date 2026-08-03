@@ -5,7 +5,7 @@ public enum JobStatus
     Pending,
     Processing,
     Done,
-    Failed
+    Failed,
 }
 
 public sealed class TranscriptionJob

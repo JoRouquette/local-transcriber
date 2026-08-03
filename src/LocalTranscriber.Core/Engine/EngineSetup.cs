@@ -29,9 +29,13 @@ public sealed class EngineSetup
         EngineSourceDir = Path.Combine(_appDir, "engine");
         // Machine-wide (%PROGRAMDATA%) et non %LOCALAPPDATA% : le service LocalSystem doit
         // trouver le meme environnement que celui installe par la GUI de l'utilisateur.
-        EnvDir = envDir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "LocalTranscriber", "engine-env");
+        EnvDir =
+            envDir
+            ?? Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "LocalTranscriber",
+                "engine-env"
+            );
     }
 
     /// <summary>L'environnement est pret si l'executable console existe.</summary>
@@ -47,7 +51,11 @@ public sealed class EngineSetup
     /// <summary>
     /// Installe l'environnement (idempotent). Diffuse la progression ligne a ligne.
     /// </summary>
-    public async Task<bool> SetupAsync(IProgress<string>? progress, bool cuda = false, CancellationToken ct = default)
+    public async Task<bool> SetupAsync(
+        IProgress<string>? progress,
+        bool cuda = false,
+        CancellationToken ct = default
+    )
     {
         var uv = ResolveUv();
         var torchIndex = cuda
@@ -56,33 +64,90 @@ public sealed class EngineSetup
 
         void Report(string m) => progress?.Report(m);
 
-        if (!Directory.Exists(EngineSourceDir) || !File.Exists(Path.Combine(EngineSourceDir, "requirements.txt")))
+        if (
+            !Directory.Exists(EngineSourceDir)
+            || !File.Exists(Path.Combine(EngineSourceDir, "requirements.txt"))
+        )
         {
             Report($"Source du moteur introuvable : {EngineSourceDir}");
             return false;
         }
 
         Report("Creation de l'environnement Python 3.11 (uv)…");
-        if (!await RunAsync(uv, new[] { "venv", "--python", "3.11", EnvDir }, progress, ct)) return false;
+        if (!await RunAsync(uv, new[] { "venv", "--python", "3.11", EnvDir }, progress, ct))
+            return false;
 
         Report("Installation de PyTorch…");
-        if (!await RunAsync(uv, new[] { "pip", "install", "--python", VenvPython,
-            "torch==2.2.2", "torchaudio==2.2.2", "--index-url", torchIndex }, progress, ct)) return false;
+        if (
+            !await RunAsync(
+                uv,
+                new[]
+                {
+                    "pip",
+                    "install",
+                    "--python",
+                    VenvPython,
+                    "torch==2.2.2",
+                    "torchaudio==2.2.2",
+                    "--index-url",
+                    torchIndex,
+                },
+                progress,
+                ct
+            )
+        )
+            return false;
 
         Report("Installation des dependances du moteur…");
-        if (!await RunAsync(uv, new[] { "pip", "install", "--python", VenvPython,
-            "-r", Path.Combine(EngineSourceDir, "requirements.txt") }, progress, ct)) return false;
+        if (
+            !await RunAsync(
+                uv,
+                new[]
+                {
+                    "pip",
+                    "install",
+                    "--python",
+                    VenvPython,
+                    "-r",
+                    Path.Combine(EngineSourceDir, "requirements.txt"),
+                },
+                progress,
+                ct
+            )
+        )
+            return false;
 
         Report("Installation du point d'entree du moteur…");
-        if (!await RunAsync(uv, new[] { "pip", "install", "--python", VenvPython,
-            "-e", EngineSourceDir, "--no-deps" }, progress, ct)) return false;
+        if (
+            !await RunAsync(
+                uv,
+                new[]
+                {
+                    "pip",
+                    "install",
+                    "--python",
+                    VenvPython,
+                    "-e",
+                    EngineSourceDir,
+                    "--no-deps",
+                },
+                progress,
+                ct
+            )
+        )
+            return false;
 
         var ok = IsReady;
         Report(ok ? "Moteur installe." : "Installation terminee mais executable introuvable.");
         return ok;
     }
 
-    private static async Task<bool> RunAsync(string file, string[] args, IProgress<string>? progress, CancellationToken ct)
+    private static async Task<bool> RunAsync(
+        string file,
+        string[] args,
+        IProgress<string>? progress,
+        CancellationToken ct
+    )
     {
         var psi = new ProcessStartInfo
         {
@@ -92,20 +157,31 @@ public sealed class EngineSetup
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        foreach (var a in args) psi.ArgumentList.Add(a);
+        foreach (var a in args)
+            psi.ArgumentList.Add(a);
 
         try
         {
             using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            proc.OutputDataReceived += (_, e) => { if (e.Data != null) progress?.Report(e.Data); };
-            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) progress?.Report(e.Data); };
+            proc.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    progress?.Report(e.Data);
+            };
+            proc.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    progress?.Report(e.Data);
+            };
             proc.Start();
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             await proc.WaitForExitAsync(ct);
             if (proc.ExitCode != 0)
             {
-                progress?.Report($"Echec (code {proc.ExitCode}) : {Path.GetFileName(file)} {string.Join(' ', args)}");
+                progress?.Report(
+                    $"Echec (code {proc.ExitCode}) : {Path.GetFileName(file)} {string.Join(' ', args)}"
+                );
                 return false;
             }
             return true;

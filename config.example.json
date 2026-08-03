@@ -39,6 +39,12 @@
     "srt": true,
     "text": true
   },
+  "chunking": {
+    "enabled": true,
+    "threshold_minutes": 20,
+    "chunk_minutes": 10,
+    "min_silence_seconds": 0.5
+  },
   "projects": [
     {
       "name": "Exemple - Reunions",

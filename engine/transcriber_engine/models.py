@@ -26,6 +26,12 @@ class EngineRequest:
     output_srt: bool = True
     output_text: bool = True
     model_cache_dir: str = ""
+    # Découpe par silence des fichiers longs (transcription par chunks ; alignement et
+    # diarisation restent sur le fichier entier).
+    chunking_enabled: bool = False
+    chunk_threshold_minutes: int = 20
+    chunk_minutes: int = 10
+    chunk_min_silence_seconds: float = 0.5
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "EngineRequest":

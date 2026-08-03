@@ -35,7 +35,8 @@ public sealed class SettingsService
     {
         Config = ConfigStore.Load();
         Projects.Clear();
-        foreach (var p in Config.Projects) Projects.Add(p);
+        foreach (var p in Config.Projects)
+            Projects.Add(p);
         Reloaded?.Invoke();
     }
 

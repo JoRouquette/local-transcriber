@@ -32,12 +32,20 @@ public sealed class QuietPeriodRow : ObservableObject
     public string Start
     {
         get => Model.Start;
-        set { Model.Start = value; OnPropertyChanged(); }
+        set
+        {
+            Model.Start = value;
+            OnPropertyChanged();
+        }
     }
 
     public string End
     {
         get => Model.End;
-        set { Model.End = value; OnPropertyChanged(); }
+        set
+        {
+            Model.End = value;
+            OnPropertyChanged();
+        }
     }
 }

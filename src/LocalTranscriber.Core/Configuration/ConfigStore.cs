@@ -10,9 +10,12 @@ namespace LocalTranscriber.Core.Configuration;
 /// </summary>
 public static class ConfigStore
 {
-    public static string DefaultConfigPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "LocalTranscriber", "config.json");
+    public static string DefaultConfigPath =>
+        Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            "LocalTranscriber",
+            "config.json"
+        );
 
     /// <summary>Developpe les variables d'environnement Windows (%LOCALAPPDATA%, ...).</summary>
     public static string ExpandPath(string path) =>
@@ -25,7 +28,8 @@ public static class ConfigStore
     {
         path ??= DefaultConfigPath;
         var config = File.Exists(path)
-            ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonDefaults.Options) ?? new AppConfig()
+            ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonDefaults.Options)
+                ?? new AppConfig()
             : new AppConfig();
 
         MigrateLegacyUserPaths(config);
@@ -40,10 +44,14 @@ public static class ConfigStore
     /// </summary>
     private static void MigrateLegacyUserPaths(AppConfig config)
     {
-        static string Fix(string p) => string.IsNullOrWhiteSpace(p)
-            ? p
-            : p.Replace(@"%LOCALAPPDATA%\LocalTranscriber", @"%PROGRAMDATA%\LocalTranscriber",
-                        StringComparison.OrdinalIgnoreCase);
+        static string Fix(string p) =>
+            string.IsNullOrWhiteSpace(p)
+                ? p
+                : p.Replace(
+                    @"%LOCALAPPDATA%\LocalTranscriber",
+                    @"%PROGRAMDATA%\LocalTranscriber",
+                    StringComparison.OrdinalIgnoreCase
+                );
 
         config.DataDir = Fix(config.DataDir);
         config.ModelCacheDir = Fix(config.ModelCacheDir);
@@ -59,14 +67,20 @@ public static class ConfigStore
         foreach (var dir in LocalSearchDirs(mainPath))
         {
             var local = Path.Combine(dir, LocalFileName);
-            if (!File.Exists(local)) continue;
+            if (!File.Exists(local))
+                continue;
             try
             {
-                var overlay = JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(local), JsonDefaults.Options);
+                var overlay = JsonSerializer.Deserialize<AppConfig>(
+                    File.ReadAllText(local),
+                    JsonDefaults.Options
+                );
                 if (overlay is not null && !string.IsNullOrWhiteSpace(overlay.HfToken))
                     config.HfToken = overlay.HfToken;
             }
-            catch { /* fichier local invalide : on ignore */ }
+            catch
+            { /* fichier local invalide : on ignore */
+            }
             break; // premier trouve = gagnant
         }
     }
@@ -74,7 +88,8 @@ public static class ConfigStore
     private static IEnumerable<string> LocalSearchDirs(string mainPath)
     {
         var configDir = Path.GetDirectoryName(mainPath);
-        if (!string.IsNullOrEmpty(configDir)) yield return configDir;
+        if (!string.IsNullOrEmpty(configDir))
+            yield return configDir;
         yield return Directory.GetCurrentDirectory();
         yield return AppContext.BaseDirectory;
     }
@@ -93,7 +108,10 @@ public static class ConfigStore
 
         var localPath = Path.Combine(dir, LocalFileName);
         if (!string.IsNullOrWhiteSpace(token))
-            File.WriteAllText(localPath, JsonSerializer.Serialize(new LocalSecrets { HfToken = token }, JsonDefaults.Options));
+            File.WriteAllText(
+                localPath,
+                JsonSerializer.Serialize(new LocalSecrets { HfToken = token }, JsonDefaults.Options)
+            );
     }
 
     private sealed class LocalSecrets

@@ -4,7 +4,7 @@ namespace LocalTranscriber.Core.Jobs;
 
 public static class CommandTypes
 {
-    public const string ReprocessFile = "reprocess_file";      // payload = chemin audio
+    public const string ReprocessFile = "reprocess_file"; // payload = chemin audio
     public const string ReprocessProject = "reprocess_project"; // payload = chemin relatif du projet
 }
 
@@ -75,8 +75,14 @@ public sealed class CommandStore
             sel.CommandText = "SELECT id, type, payload, created_at FROM commands ORDER BY id";
             using var r = sel.ExecuteReader();
             while (r.Read())
-                list.Add(new TranscriptionCommand(
-                    r.GetInt64(0), r.GetString(1), r.IsDBNull(2) ? "" : r.GetString(2), DateTime.Parse(r.GetString(3))));
+                list.Add(
+                    new TranscriptionCommand(
+                        r.GetInt64(0),
+                        r.GetString(1),
+                        r.IsDBNull(2) ? "" : r.GetString(2),
+                        DateTime.Parse(r.GetString(3))
+                    )
+                );
         }
 
         if (list.Count > 0)

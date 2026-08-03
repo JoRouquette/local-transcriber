@@ -28,7 +28,9 @@ public partial class App : Application
 
     private static void ConfigureServices(IServiceCollection services)
     {
-        services.AddSingleton<ISnackbarMessageQueue>(_ => new SnackbarMessageQueue(TimeSpan.FromSeconds(3)));
+        services.AddSingleton<ISnackbarMessageQueue>(_ => new SnackbarMessageQueue(
+            TimeSpan.FromSeconds(3)
+        ));
         services.AddSingleton<SettingsService>();
         services.AddSingleton<ThemeService>();
         services.AddSingleton<UpdateService>();

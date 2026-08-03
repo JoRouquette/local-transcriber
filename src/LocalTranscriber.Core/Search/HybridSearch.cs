@@ -2,7 +2,12 @@ using LocalTranscriber.Core.Embedding;
 
 namespace LocalTranscriber.Core.Search;
 
-public enum SearchMode { Hybrid, Semantic, Keyword }
+public enum SearchMode
+{
+    Hybrid,
+    Semantic,
+    Keyword,
+}
 
 public sealed record SearchResult(
     string Path,
@@ -11,7 +16,8 @@ public sealed record SearchResult(
     string Speakers,
     string Snippet,
     double Score,
-    string Mode);
+    string Mode
+);
 
 /// <summary>
 /// Recherche hybride : fusionne la recherche plein-texte (FTS5) et la recherche
@@ -34,8 +40,13 @@ public sealed class HybridSearch
     }
 
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(
-        string query, SearchMode mode, string? project = null, string? speaker = null,
-        int limit = 20, CancellationToken ct = default)
+        string query,
+        SearchMode mode,
+        string? project = null,
+        string? speaker = null,
+        int limit = 20,
+        CancellationToken ct = default
+    )
     {
         return mode switch
         {
@@ -45,33 +56,67 @@ public sealed class HybridSearch
         };
     }
 
-    private List<SearchResult> Keyword(string query, string? project, string? speaker, int limit)
-        => _index.Search(query, project, speaker, limit)
-            .Select(h => new SearchResult(h.Path, h.Project, h.BaseName, h.Speakers, h.Snippet, 0, "keyword"))
+    private List<SearchResult> Keyword(string query, string? project, string? speaker, int limit) =>
+        _index
+            .Search(query, project, speaker, limit)
+            .Select(h => new SearchResult(
+                h.Path,
+                h.Project,
+                h.BaseName,
+                h.Speakers,
+                h.Snippet,
+                0,
+                "keyword"
+            ))
             .ToList();
 
-    private async Task<List<SearchResult>> Semantic(string query, string? project, string? speaker, int limit, CancellationToken ct)
+    private async Task<List<SearchResult>> Semantic(
+        string query,
+        string? project,
+        string? speaker,
+        int limit,
+        CancellationToken ct
+    )
     {
         var vec = await _embedder.EmbedOneAsync(query, "query", ct);
-        if (vec is null) return new();
+        if (vec is null)
+            return new();
         // On collapse au meilleur fragment par document.
-        return _vectors.Search(vec, project, speaker, limit * 4)
+        return _vectors
+            .Search(vec, project, speaker, limit * 4)
             .GroupBy(h => h.Path)
             .Select(g => g.OrderByDescending(h => h.Score).First())
             .OrderByDescending(h => h.Score)
             .Take(limit)
-            .Select(h => new SearchResult(h.Path, h.Project, h.BaseName, h.Speaker, Trim(h.Text), h.Score, "semantic"))
+            .Select(h => new SearchResult(
+                h.Path,
+                h.Project,
+                h.BaseName,
+                h.Speaker,
+                Trim(h.Text),
+                h.Score,
+                "semantic"
+            ))
             .ToList();
     }
 
-    private async Task<List<SearchResult>> Hybrid(string query, string? project, string? speaker, int limit, CancellationToken ct)
+    private async Task<List<SearchResult>> Hybrid(
+        string query,
+        string? project,
+        string? speaker,
+        int limit,
+        CancellationToken ct
+    )
     {
         var keyword = _index.Search(query, project, speaker, limit * 4);
         var vec = await _embedder.EmbedOneAsync(query, "query", ct);
         var semantic = vec is null
             ? new List<VectorHit>()
-            : _vectors.Search(vec, project, speaker, limit * 4)
-                .GroupBy(h => h.Path).Select(g => g.OrderByDescending(h => h.Score).First()).ToList();
+            : _vectors
+                .Search(vec, project, speaker, limit * 4)
+                .GroupBy(h => h.Path)
+                .Select(g => g.OrderByDescending(h => h.Score).First())
+                .ToList();
 
         var scores = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
         var meta = new Dictionary<string, SearchResult>(StringComparer.OrdinalIgnoreCase);
@@ -80,14 +125,25 @@ public sealed class HybridSearch
         {
             var h = keyword[i];
             scores[h.Path] = scores.GetValueOrDefault(h.Path) + 1.0 / (RrfK + i + 1);
-            meta.TryAdd(h.Path, new SearchResult(h.Path, h.Project, h.BaseName, h.Speakers, h.Snippet, 0, "hybrid"));
+            meta.TryAdd(
+                h.Path,
+                new SearchResult(h.Path, h.Project, h.BaseName, h.Speakers, h.Snippet, 0, "hybrid")
+            );
         }
         for (var i = 0; i < semantic.Count; i++)
         {
             var h = semantic[i];
             scores[h.Path] = scores.GetValueOrDefault(h.Path) + 1.0 / (RrfK + i + 1);
             // Le fragment semantique fait un meilleur extrait : il prime sur le snippet FTS.
-            meta[h.Path] = new SearchResult(h.Path, h.Project, h.BaseName, h.Speaker, Trim(h.Text), 0, "hybrid");
+            meta[h.Path] = new SearchResult(
+                h.Path,
+                h.Project,
+                h.BaseName,
+                h.Speaker,
+                Trim(h.Text),
+                0,
+                "hybrid"
+            );
         }
 
         return scores
@@ -97,6 +153,6 @@ public sealed class HybridSearch
             .ToList();
     }
 
-    private static string Trim(string text, int max = 320)
-        => text.Length <= max ? text : text[..max].TrimEnd() + " …";
+    private static string Trim(string text, int max = 320) =>
+        text.Length <= max ? text : text[..max].TrimEnd() + " …";
 }

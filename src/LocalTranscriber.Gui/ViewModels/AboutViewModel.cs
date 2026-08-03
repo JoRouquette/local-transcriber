@@ -15,7 +15,11 @@ public sealed partial class AboutViewModel : ObservableObject
     private readonly UpdateService _updates;
     private readonly ISnackbarMessageQueue _snackbar;
 
-    public AboutViewModel(SettingsService settings, UpdateService updates, ISnackbarMessageQueue snackbar)
+    public AboutViewModel(
+        SettingsService settings,
+        UpdateService updates,
+        ISnackbarMessageQueue snackbar
+    )
     {
         _settings = settings;
         _updates = updates;
@@ -26,19 +30,24 @@ public sealed partial class AboutViewModel : ObservableObject
         _ = CheckForUpdatesAsync(launch: true);
     }
 
-    public string Version => typeof(AboutViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+    public string Version =>
+        typeof(AboutViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
     public string McpEndpoint => $"http://127.0.0.1:{_settings.Config.McpPort}/mcp";
     public string RepositoryUrl => "https://github.com/JoRouquette/local-transcriber";
 
     // ---- Mises à jour ----
-    [ObservableProperty] private bool _autoInstallUpdates;
-    [ObservableProperty] private string _updateStatus = "Vérification des mises à jour…";
+    [ObservableProperty]
+    private bool _autoInstallUpdates;
+
+    [ObservableProperty]
+    private string _updateStatus = "Vérification des mises à jour…";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsNotChecking))]
     private bool _isCheckingUpdate;
 
-    [ObservableProperty] private bool _updateReady;
+    [ObservableProperty]
+    private bool _updateReady;
 
     public bool IsNotChecking => !IsCheckingUpdate;
 
@@ -53,7 +62,8 @@ public sealed partial class AboutViewModel : ObservableObject
 
     private async Task CheckForUpdatesAsync(bool launch)
     {
-        if (IsCheckingUpdate) return;
+        if (IsCheckingUpdate)
+            return;
         IsCheckingUpdate = true;
         UpdateReady = false;
         UpdateStatus = "Recherche de mises à jour…";
@@ -61,7 +71,8 @@ public sealed partial class AboutViewModel : ObservableObject
         {
             if (!_updates.IsInstalled)
             {
-                UpdateStatus = $"Version {Version} — mode développement (mises à jour désactivées).";
+                UpdateStatus =
+                    $"Version {Version} — mode développement (mises à jour désactivées).";
                 return;
             }
 
@@ -75,20 +86,25 @@ public sealed partial class AboutViewModel : ObservableObject
             if (AutoInstallUpdates)
             {
                 _updates.ApplyOnExit();
-                UpdateStatus = $"Mise à jour {version} prête — elle s'installera à la fermeture de l'application.";
+                UpdateStatus =
+                    $"Mise à jour {version} prête — elle s'installera à la fermeture de l'application.";
                 _snackbar.Enqueue($"Mise à jour {version} prête : installée à la fermeture.");
             }
             else
             {
                 UpdateReady = true;
                 UpdateStatus = $"Mise à jour {version} disponible.";
-                if (!launch) _snackbar.Enqueue($"Mise à jour {version} disponible : « Installer et redémarrer ».");
+                if (!launch)
+                    _snackbar.Enqueue(
+                        $"Mise à jour {version} disponible : « Installer et redémarrer »."
+                    );
             }
         }
         catch (Exception ex)
         {
             UpdateStatus = "Échec de la vérification des mises à jour.";
-            if (!launch) _snackbar.Enqueue("Mise à jour : " + ex.Message);
+            if (!launch)
+                _snackbar.Enqueue("Mise à jour : " + ex.Message);
         }
         finally
         {
@@ -99,15 +115,24 @@ public sealed partial class AboutViewModel : ObservableObject
     [RelayCommand]
     private void InstallUpdate()
     {
-        if (UpdateReady) _updates.ApplyAndRestart();
+        if (UpdateReady)
+            _updates.ApplyAndRestart();
     }
 
-    [RelayCommand] private void OpenRepository() => OpenUrl(RepositoryUrl);
-    [RelayCommand] private void OpenMcp() => OpenUrl(McpEndpoint);
+    [RelayCommand]
+    private void OpenRepository() => OpenUrl(RepositoryUrl);
+
+    [RelayCommand]
+    private void OpenMcp() => OpenUrl(McpEndpoint);
 
     private static void OpenUrl(string url)
     {
-        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
-        catch { /* ignore */ }
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch
+        { /* ignore */
+        }
     }
 }

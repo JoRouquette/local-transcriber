@@ -1,126 +1,261 @@
-<UserControl x:Class="LocalTranscriber.Gui.Views.Pages.GeneralPage"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
-        <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+<UserControl
+  x:Class="LocalTranscriber.Gui.Views.Pages.GeneralPage"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="24">
+    <StackPanel MaxWidth="820" HorizontalAlignment="Left">
+      <!-- Dossiers -->
+      <materialDesign:Card
+        Padding="20"
+        Margin="0,0,0,16"
+        materialDesign:ElevationAssist.Elevation="Dp2"
+      >
+        <StackPanel>
+          <TextBlock Text="Dossiers" FontSize="16" FontWeight="Medium" Margin="0,0,0,12" />
 
-            <!-- Dossiers -->
-            <materialDesign:Card Padding="20" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <TextBlock Text="Dossiers" FontSize="16" FontWeight="Medium" Margin="0,0,0,12" />
+          <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+              Grid.Column="0"
+              Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+              materialDesign:HintAssist.Hint="Dossier surveillé (Inbox)"
+              Text="{Binding WatchRoot, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+            />
+            <Button
+              Grid.Column="1"
+              Style="{StaticResource MaterialDesignIconButton}"
+              Command="{Binding BrowseWatchCommand}"
+              ToolTip="Parcourir"
+              VerticalAlignment="Bottom"
+            >
+              <materialDesign:PackIcon Kind="FolderOpen" />
+            </Button>
+          </Grid>
 
-                    <Grid Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 materialDesign:HintAssist.Hint="Dossier surveillé (Inbox)"
-                                 Text="{Binding WatchRoot, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}" />
-                        <Button Grid.Column="1" Style="{StaticResource MaterialDesignIconButton}"
-                                Command="{Binding BrowseWatchCommand}" ToolTip="Parcourir" VerticalAlignment="Bottom">
-                            <materialDesign:PackIcon Kind="FolderOpen" />
-                        </Button>
-                    </Grid>
+          <Grid Margin="0,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+              Grid.Column="0"
+              Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+              materialDesign:HintAssist.Hint="Dossier de sortie (Outputs)"
+              Text="{Binding OutputRoot, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}"
+            />
+            <Button
+              Grid.Column="1"
+              Style="{StaticResource MaterialDesignIconButton}"
+              Command="{Binding BrowseOutputCommand}"
+              ToolTip="Parcourir"
+              VerticalAlignment="Bottom"
+            >
+              <materialDesign:PackIcon Kind="FolderOpen" />
+            </Button>
+          </Grid>
 
-                    <Grid Margin="0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 materialDesign:HintAssist.Hint="Dossier de sortie (Outputs)"
-                                 Text="{Binding OutputRoot, UpdateSourceTrigger=PropertyChanged, ValidatesOnNotifyDataErrors=True}" />
-                        <Button Grid.Column="1" Style="{StaticResource MaterialDesignIconButton}"
-                                Command="{Binding BrowseOutputCommand}" ToolTip="Parcourir" VerticalAlignment="Bottom">
-                            <materialDesign:PackIcon Kind="FolderOpen" />
-                        </Button>
-                    </Grid>
-
-                    <TextBox Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                             materialDesign:HintAssist.Hint="Cache des modèles"
-                             Text="{Binding ModelCacheDir, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,0" />
-                </StackPanel>
-            </materialDesign:Card>
-
-            <!-- Moteur -->
-            <materialDesign:Card Padding="20" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <TextBlock Text="Moteur (valeurs par défaut)" FontSize="16" FontWeight="Medium" Margin="0,0,0,12" />
-                    <UniformGrid Columns="2">
-                        <ComboBox Style="{StaticResource MaterialDesignFloatingHintComboBox}"
-                                  materialDesign:HintAssist.Hint="Modèle" Margin="0,0,8,12"
-                                  ItemsSource="{Binding ModelSizes}" SelectedItem="{Binding ModelSize}" />
-                        <ComboBox Style="{StaticResource MaterialDesignFloatingHintComboBox}"
-                                  materialDesign:HintAssist.Hint="Périphérique" Margin="8,0,0,12"
-                                  ItemsSource="{Binding Devices}" SelectedItem="{Binding Device}" />
-                        <ComboBox Style="{StaticResource MaterialDesignFloatingHintComboBox}"
-                                  materialDesign:HintAssist.Hint="Type de calcul" Margin="0,0,8,0"
-                                  ItemsSource="{Binding ComputeTypes}" SelectedItem="{Binding ComputeType}" />
-                        <ComboBox Style="{StaticResource MaterialDesignFloatingHintComboBox}"
-                                  materialDesign:HintAssist.Hint="Langue" Margin="8,0,0,0"
-                                  ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" />
-                    </UniformGrid>
-                </StackPanel>
-            </materialDesign:Card>
-
-            <!-- Diarisation & locuteurs -->
-            <materialDesign:Card Padding="20" Margin="0,0,0,16" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <TextBlock Text="Diarisation &amp; locuteurs" FontSize="16" FontWeight="Medium" Margin="0,0,0,12" />
-
-                    <PasswordBox Style="{StaticResource MaterialDesignFloatingHintRevealPasswordBox}"
-                                 materialDesign:HintAssist.Hint="Jeton Hugging Face (hf_…)"
-                                 materialDesign:PasswordBoxAssist.Password="{Binding HfToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                    <TextBlock Text="Gratuit : compte Hugging Face → accepter les conditions pyannote → token 'read'. Stocké localement (config.local.json), hors dépôt."
-                               Foreground="{DynamicResource MaterialDesignBodyLight}" FontSize="11"
-                               TextWrapping="Wrap" Margin="0,4,0,12" />
-
-                    <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}"
-                                  IsChecked="{Binding DiarizationEnabled}" HorizontalAlignment="Left" Margin="0,4"
-                                  Content="  Diarisation (qui parle quand)" />
-                    <ToggleButton Style="{StaticResource MaterialDesignSwitchToggleButton}"
-                                  IsChecked="{Binding SpeakerIdEnabled}" HorizontalAlignment="Left" Margin="0,8"
-                                  Content="  Identifier les locuteurs (snippets de voix)" />
-
-                    <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                        <TextBlock Text="Seuil de similarité" VerticalAlignment="Center" Margin="0,0,12,0" />
-                        <Slider Width="200" Minimum="0.3" Maximum="0.9" TickFrequency="0.05"
-                                Value="{Binding SpeakerThreshold}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding SpeakerThreshold, StringFormat=N2}" VerticalAlignment="Center" Margin="12,0,0,0" />
-                    </StackPanel>
-                </StackPanel>
-            </materialDesign:Card>
-
-            <!-- Heures d'inactivité -->
-            <materialDesign:Card Padding="20" materialDesign:ElevationAssist.Elevation="Dp2">
-                <StackPanel>
-                    <TextBlock Text="Heures d'inactivité" FontSize="16" FontWeight="Medium" Margin="0,0,0,4" />
-                    <TextBlock Text="Aucune transcription n'est lancée pendant ces plages (la détection continue). Jours : mon,tue,wed,thu,fri,sat,sun — vide = tous les jours. Heures au format HH:mm (fin &lt; début = passe minuit)."
-                               Foreground="{DynamicResource MaterialDesignBodyLight}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,12" />
-
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" Command="{Binding AddQuietPeriodCommand}" Margin="0,0,8,0">
-                            <StackPanel Orientation="Horizontal">
-                                <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" Margin="0,0,6,0" />
-                                <TextBlock Text="Ajouter une plage" VerticalAlignment="Center" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource MaterialDesignFlatButton}" Command="{Binding RemoveQuietPeriodCommand}" Content="Supprimer" />
-                    </StackPanel>
-
-                    <DataGrid ItemsSource="{Binding QuietHours}" SelectedItem="{Binding SelectedQuietPeriod}"
-                              Style="{StaticResource MaterialDesignDataGrid}" AutoGenerateColumns="False" CanUserAddRows="False" MaxHeight="200">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Jours" Binding="{Binding DaysText, UpdateSourceTrigger=LostFocus}" Width="2*" />
-                            <DataGridTextColumn Header="Début" Binding="{Binding Start, UpdateSourceTrigger=LostFocus}" Width="*" />
-                            <DataGridTextColumn Header="Fin" Binding="{Binding End, UpdateSourceTrigger=LostFocus}" Width="*" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                </StackPanel>
-            </materialDesign:Card>
-
+          <TextBox
+            Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+            materialDesign:HintAssist.Hint="Cache des modèles"
+            Text="{Binding ModelCacheDir, UpdateSourceTrigger=PropertyChanged}"
+            Margin="0,8,0,0"
+          />
         </StackPanel>
-    </ScrollViewer>
+      </materialDesign:Card>
+
+      <!-- Moteur -->
+      <materialDesign:Card
+        Padding="20"
+        Margin="0,0,0,16"
+        materialDesign:ElevationAssist.Elevation="Dp2"
+      >
+        <StackPanel>
+          <TextBlock
+            Text="Moteur (valeurs par défaut)"
+            FontSize="16"
+            FontWeight="Medium"
+            Margin="0,0,0,12"
+          />
+          <UniformGrid Columns="2">
+            <ComboBox
+              Style="{StaticResource MaterialDesignFloatingHintComboBox}"
+              materialDesign:HintAssist.Hint="Modèle"
+              Margin="0,0,8,12"
+              ItemsSource="{Binding ModelSizes}"
+              SelectedItem="{Binding ModelSize}"
+            />
+            <ComboBox
+              Style="{StaticResource MaterialDesignFloatingHintComboBox}"
+              materialDesign:HintAssist.Hint="Périphérique"
+              Margin="8,0,0,12"
+              ItemsSource="{Binding Devices}"
+              SelectedItem="{Binding Device}"
+            />
+            <ComboBox
+              Style="{StaticResource MaterialDesignFloatingHintComboBox}"
+              materialDesign:HintAssist.Hint="Type de calcul"
+              Margin="0,0,8,0"
+              ItemsSource="{Binding ComputeTypes}"
+              SelectedItem="{Binding ComputeType}"
+            />
+            <ComboBox
+              Style="{StaticResource MaterialDesignFloatingHintComboBox}"
+              materialDesign:HintAssist.Hint="Langue"
+              Margin="8,0,0,0"
+              ItemsSource="{Binding Languages}"
+              SelectedItem="{Binding Language}"
+            />
+          </UniformGrid>
+        </StackPanel>
+      </materialDesign:Card>
+
+      <!-- Diarisation & locuteurs -->
+      <materialDesign:Card
+        Padding="20"
+        Margin="0,0,0,16"
+        materialDesign:ElevationAssist.Elevation="Dp2"
+      >
+        <StackPanel>
+          <TextBlock
+            Text="Diarisation &amp; locuteurs"
+            FontSize="16"
+            FontWeight="Medium"
+            Margin="0,0,0,12"
+          />
+
+          <PasswordBox
+            Style="{StaticResource MaterialDesignFloatingHintRevealPasswordBox}"
+            materialDesign:HintAssist.Hint="Jeton Hugging Face (hf_…)"
+            materialDesign:PasswordBoxAssist.Password="{Binding HfToken, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+          />
+          <TextBlock
+            Text="Gratuit : compte Hugging Face → accepter les conditions pyannote → token 'read'. Stocké localement (config.local.json), hors dépôt."
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+            FontSize="11"
+            TextWrapping="Wrap"
+            Margin="0,4,0,12"
+          />
+
+          <DockPanel LastChildFill="False" Margin="0,6">
+            <ToggleButton
+              DockPanel.Dock="Right"
+              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource PrimaryHueMidBrush}"
+              IsChecked="{Binding DiarizationEnabled}"
+            />
+            <TextBlock
+              DockPanel.Dock="Left"
+              VerticalAlignment="Center"
+              FontSize="14"
+              Foreground="{DynamicResource MaterialDesignBody}"
+              Text="Diarisation (qui parle quand)"
+            />
+          </DockPanel>
+          <DockPanel LastChildFill="False" Margin="0,6">
+            <ToggleButton
+              DockPanel.Dock="Right"
+              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource PrimaryHueMidBrush}"
+              IsChecked="{Binding SpeakerIdEnabled}"
+            />
+            <TextBlock
+              DockPanel.Dock="Left"
+              VerticalAlignment="Center"
+              FontSize="14"
+              Foreground="{DynamicResource MaterialDesignBody}"
+              Text="Identifier les locuteurs (snippets de voix)"
+            />
+          </DockPanel>
+
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <TextBlock Text="Seuil de similarité" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <Slider
+              Width="200"
+              Minimum="0.3"
+              Maximum="0.9"
+              TickFrequency="0.05"
+              Value="{Binding SpeakerThreshold}"
+              VerticalAlignment="Center"
+            />
+            <TextBlock
+              Text="{Binding SpeakerThreshold, StringFormat=N2}"
+              VerticalAlignment="Center"
+              Margin="12,0,0,0"
+            />
+          </StackPanel>
+        </StackPanel>
+      </materialDesign:Card>
+
+      <!-- Heures d'inactivité -->
+      <materialDesign:Card Padding="20" materialDesign:ElevationAssist.Elevation="Dp2">
+        <StackPanel>
+          <TextBlock
+            Text="Heures d'inactivité"
+            FontSize="16"
+            FontWeight="Medium"
+            Margin="0,0,0,4"
+          />
+          <TextBlock
+            Text="Aucune transcription n'est lancée pendant ces plages (la détection continue). Jours : mon,tue,wed,thu,fri,sat,sun — vide = tous les jours. Heures au format HH:mm (fin &lt; début = passe minuit)."
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+            FontSize="11"
+            TextWrapping="Wrap"
+            Margin="0,0,0,12"
+          />
+
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+            <Button
+              Style="{StaticResource MaterialDesignOutlinedButton}"
+              Command="{Binding AddQuietPeriodCommand}"
+              Margin="0,0,8,0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="Ajouter une plage" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding RemoveQuietPeriodCommand}"
+              Content="Supprimer"
+            />
+          </StackPanel>
+
+          <DataGrid
+            ItemsSource="{Binding QuietHours}"
+            SelectedItem="{Binding SelectedQuietPeriod}"
+            Style="{StaticResource MaterialDesignDataGrid}"
+            AutoGenerateColumns="False"
+            CanUserAddRows="False"
+            MaxHeight="200"
+          >
+            <DataGrid.Columns>
+              <DataGridTextColumn
+                Header="Jours"
+                Binding="{Binding DaysText, UpdateSourceTrigger=LostFocus}"
+                Width="2*"
+              />
+              <DataGridTextColumn
+                Header="Début"
+                Binding="{Binding Start, UpdateSourceTrigger=LostFocus}"
+                Width="*"
+              />
+              <DataGridTextColumn
+                Header="Fin"
+                Binding="{Binding End, UpdateSourceTrigger=LostFocus}"
+                Width="*"
+              />
+            </DataGrid.Columns>
+          </DataGrid>
+        </StackPanel>
+      </materialDesign:Card>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

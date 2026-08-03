@@ -17,12 +17,22 @@ public sealed class SidecarManager : IDisposable
 
     public bool IsRunning => _proc is { HasExited: false };
 
-    public async Task EnsureStartedAsync(string enginePath, int port, string cacheDir, string device, CancellationToken ct)
+    public async Task EnsureStartedAsync(
+        string enginePath,
+        int port,
+        string cacheDir,
+        string device,
+        CancellationToken ct
+    )
     {
-        if (IsRunning) return;
+        if (IsRunning)
+            return;
         if (!File.Exists(enginePath))
         {
-            _logger.LogWarning("Sidecar embeddings : moteur introuvable ({Engine}). Recherche semantique indisponible.", enginePath);
+            _logger.LogWarning(
+                "Sidecar embeddings : moteur introuvable ({Engine}). Recherche semantique indisponible.",
+                enginePath
+            );
             return;
         }
 
@@ -35,20 +45,34 @@ public sealed class SidecarManager : IDisposable
             CreateNoWindow = true,
         };
         psi.ArgumentList.Add("--serve-embeddings");
-        psi.ArgumentList.Add("--port"); psi.ArgumentList.Add(port.ToString());
-        psi.ArgumentList.Add("--device"); psi.ArgumentList.Add(device);
+        psi.ArgumentList.Add("--port");
+        psi.ArgumentList.Add(port.ToString());
+        psi.ArgumentList.Add("--device");
+        psi.ArgumentList.Add(device);
         if (!string.IsNullOrWhiteSpace(cacheDir))
         {
-            psi.ArgumentList.Add("--cache-dir"); psi.ArgumentList.Add(cacheDir);
+            psi.ArgumentList.Add("--cache-dir");
+            psi.ArgumentList.Add(cacheDir);
         }
 
         _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-        _proc.OutputDataReceived += (_, e) => { if (e.Data != null) _logger.LogDebug("[embeddings] {Line}", e.Data); };
-        _proc.ErrorDataReceived += (_, e) => { if (e.Data != null) _logger.LogDebug("[embeddings] {Line}", e.Data); };
+        _proc.OutputDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+                _logger.LogDebug("[embeddings] {Line}", e.Data);
+        };
+        _proc.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data != null)
+                _logger.LogDebug("[embeddings] {Line}", e.Data);
+        };
         _proc.Start();
         _proc.BeginOutputReadLine();
         _proc.BeginErrorReadLine();
-        _logger.LogInformation("Sidecar embeddings demarre (port {Port}), chargement du modele...", port);
+        _logger.LogInformation(
+            "Sidecar embeddings demarre (port {Port}), chargement du modele...",
+            port
+        );
 
         // Attend que le port accepte les connexions (chargement/telechargement du modele).
         var deadline = DateTime.UtcNow.AddMinutes(5);
@@ -59,7 +83,11 @@ public sealed class SidecarManager : IDisposable
                 _logger.LogError("Le sidecar embeddings s'est arrete au demarrage.");
                 return;
             }
-            if (await CanConnectAsync(port, ct)) { _logger.LogInformation("Sidecar embeddings pret."); return; }
+            if (await CanConnectAsync(port, ct))
+            {
+                _logger.LogInformation("Sidecar embeddings pret.");
+                return;
+            }
             await Task.Delay(1000, ct);
         }
     }
@@ -74,7 +102,10 @@ public sealed class SidecarManager : IDisposable
             await client.ConnectAsync("127.0.0.1", port, cts.Token);
             return client.Connected;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
 
     public void Dispose()
@@ -87,7 +118,9 @@ public sealed class SidecarManager : IDisposable
                 _proc.WaitForExit(3000);
             }
         }
-        catch { /* best effort */ }
+        catch
+        { /* best effort */
+        }
         _proc?.Dispose();
     }
 }

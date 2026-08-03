@@ -20,8 +20,14 @@ public sealed partial class ShellViewModel : ObservableObject
     public ObservableCollection<NavItem> NavItems { get; }
 
     public ShellViewModel(
-        SettingsService settings, ThemeService theme, ISnackbarMessageQueue messageQueue,
-        GeneralViewModel general, ProjectsViewModel projects, ServiceViewModel service, AboutViewModel about)
+        SettingsService settings,
+        ThemeService theme,
+        ISnackbarMessageQueue messageQueue,
+        GeneralViewModel general,
+        ProjectsViewModel projects,
+        ServiceViewModel service,
+        AboutViewModel about
+    )
     {
         _settings = settings;
         _theme = theme;
@@ -32,15 +38,18 @@ public sealed partial class ShellViewModel : ObservableObject
         {
             new("Général", PackIconKind.Tune, general),
             new("Projets", PackIconKind.FolderMultipleOutline, projects),
-            new("Service & File", PackIconKind.Server, service),
+            new("Traitements et fichiers", PackIconKind.Server, service),
             new("À propos", PackIconKind.InformationOutline, about),
         };
         _selectedNavItem = NavItems[0];
         _isDark = _theme.IsDark;
     }
 
-    [ObservableProperty] private NavItem _selectedNavItem;
-    [ObservableProperty] private bool _isDark;
+    [ObservableProperty]
+    private NavItem _selectedNavItem;
+
+    [ObservableProperty]
+    private bool _isDark;
 
     public object CurrentPage => SelectedNavItem.Page;
 
@@ -55,7 +64,9 @@ public sealed partial class ShellViewModel : ObservableObject
             return;
         }
         _settings.Save();
-        MessageQueue.Enqueue("Configuration enregistrée. Le service la rechargera automatiquement.");
+        MessageQueue.Enqueue(
+            "Configuration enregistrée. Le service la rechargera automatiquement."
+        );
     }
 
     [RelayCommand]

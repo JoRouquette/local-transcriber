@@ -9,7 +9,8 @@ public sealed record VectorHit(
     string Speaker,
     double Start,
     string Text,
-    double Score);
+    double Score
+);
 
 /// <summary>
 /// Stockage et recherche des vecteurs de fragments (SQLite, BLOB float32).
@@ -25,13 +26,15 @@ public sealed class VectorStore
     public VectorStore(string dbPath, bool readOnly = false)
     {
         _readOnly = readOnly;
-        if (!readOnly) Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+        if (!readOnly)
+            Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
         _connectionString = new SqliteConnectionStringBuilder
         {
             DataSource = dbPath,
             Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
         }.ToString();
-        if (!readOnly) EnsureCreated();
+        if (!readOnly)
+            EnsureCreated();
     }
 
     private SqliteConnection Open()
@@ -90,10 +93,15 @@ public sealed class VectorStore
     }
 
     public void ReplaceForPath(
-        string path, string project, string baseName, string mtime,
-        IReadOnlyList<(TranscriptChunk Chunk, float[] Vector)> items)
+        string path,
+        string project,
+        string baseName,
+        string mtime,
+        IReadOnlyList<(TranscriptChunk Chunk, float[] Vector)> items
+    )
     {
-        if (_readOnly) throw new InvalidOperationException("VectorStore ouvert en lecture seule.");
+        if (_readOnly)
+            throw new InvalidOperationException("VectorStore ouvert en lecture seule.");
         using var c = Open();
         using var tx = c.BeginTransaction();
 
@@ -131,7 +139,8 @@ public sealed class VectorStore
 
     public void DeleteMissing(IEnumerable<string> existingPaths)
     {
-        if (_readOnly) return;
+        if (_readOnly)
+            return;
         var keep = new HashSet<string>(existingPaths, StringComparer.OrdinalIgnoreCase);
         using var c = Open();
         var toDelete = new List<string>();
@@ -140,7 +149,8 @@ public sealed class VectorStore
             sel.CommandText = "SELECT DISTINCT path FROM chunks";
             using var r = sel.ExecuteReader();
             while (r.Read())
-                if (!keep.Contains(r.GetString(0))) toDelete.Add(r.GetString(0));
+                if (!keep.Contains(r.GetString(0)))
+                    toDelete.Add(r.GetString(0));
         }
         foreach (var p in toDelete)
         {
@@ -151,7 +161,12 @@ public sealed class VectorStore
         }
     }
 
-    public IReadOnlyList<VectorHit> Search(float[] query, string? project = null, string? speaker = null, int topK = 20)
+    public IReadOnlyList<VectorHit> Search(
+        float[] query,
+        string? project = null,
+        string? speaker = null,
+        int topK = 20
+    )
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
@@ -171,9 +186,17 @@ public sealed class VectorStore
             {
                 var vec = FromBlob((byte[])r["vector"]);
                 var score = Dot(query, vec);
-                scored.Add(new VectorHit(
-                    r.GetString(0), r.GetString(1), r.GetString(2), r.GetString(3),
-                    r.GetDouble(4), r.GetString(5), score));
+                scored.Add(
+                    new VectorHit(
+                        r.GetString(0),
+                        r.GetString(1),
+                        r.GetString(2),
+                        r.GetString(3),
+                        r.GetDouble(4),
+                        r.GetString(5),
+                        score
+                    )
+                );
             }
         }
         return scored.OrderByDescending(h => h.Score).Take(topK).ToList();
@@ -183,7 +206,8 @@ public sealed class VectorStore
     {
         var n = Math.Min(a.Length, b.Length);
         double sum = 0;
-        for (var i = 0; i < n; i++) sum += a[i] * b[i];
+        for (var i = 0; i < n; i++)
+            sum += a[i] * b[i];
         return sum;
     }
 }

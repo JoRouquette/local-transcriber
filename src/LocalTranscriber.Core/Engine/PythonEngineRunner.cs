@@ -28,10 +28,19 @@ public sealed class PythonEngineRunner
     public async Task<EngineResult> RunAsync(EngineRequest request, CancellationToken ct = default)
     {
         if (!File.Exists(_enginePath))
-            return new EngineResult { Status = "error", AudioPath = request.AudioPath, Error = $"Moteur introuvable : {_enginePath}" };
+            return new EngineResult
+            {
+                Status = "error",
+                AudioPath = request.AudioPath,
+                Error = $"Moteur introuvable : {_enginePath}",
+            };
 
         var reqPath = Path.Combine(Path.GetTempPath(), $"lt-req-{Guid.NewGuid():N}.json");
-        await File.WriteAllTextAsync(reqPath, JsonSerializer.Serialize(request, JsonDefaults.Options), ct);
+        await File.WriteAllTextAsync(
+            reqPath,
+            JsonSerializer.Serialize(request, JsonDefaults.Options),
+            ct
+        );
 
         var psi = new ProcessStartInfo
         {
@@ -52,8 +61,16 @@ public sealed class PythonEngineRunner
         try
         {
             using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            proc.OutputDataReceived += (_, e) => { if (e.Data != null) stdout.AppendLine(e.Data); };
-            proc.ErrorDataReceived += (_, e) => { if (e.Data != null) _logger.LogDebug("[engine] {Line}", e.Data); };
+            proc.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    stdout.AppendLine(e.Data);
+            };
+            proc.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                    _logger.LogDebug("[engine] {Line}", e.Data);
+            };
 
             proc.Start();
             proc.BeginOutputReadLine();
@@ -62,18 +79,40 @@ public sealed class PythonEngineRunner
 
             var raw = stdout.ToString().Trim();
             if (string.IsNullOrEmpty(raw))
-                return new EngineResult { Status = "error", AudioPath = request.AudioPath, Error = "Le moteur n'a rien renvoye." };
+                return new EngineResult
+                {
+                    Status = "error",
+                    AudioPath = request.AudioPath,
+                    Error = "Le moteur n'a rien renvoye.",
+                };
 
             var result = JsonSerializer.Deserialize<EngineResult>(raw, JsonDefaults.Options);
-            return result ?? new EngineResult { Status = "error", AudioPath = request.AudioPath, Error = "Resultat moteur illisible." };
+            return result
+                ?? new EngineResult
+                {
+                    Status = "error",
+                    AudioPath = request.AudioPath,
+                    Error = "Resultat moteur illisible.",
+                };
         }
         catch (Exception ex)
         {
-            return new EngineResult { Status = "error", AudioPath = request.AudioPath, Error = ex.Message };
+            return new EngineResult
+            {
+                Status = "error",
+                AudioPath = request.AudioPath,
+                Error = ex.Message,
+            };
         }
         finally
         {
-            try { File.Delete(reqPath); } catch { /* best effort */ }
+            try
+            {
+                File.Delete(reqPath);
+            }
+            catch
+            { /* best effort */
+            }
         }
     }
 }

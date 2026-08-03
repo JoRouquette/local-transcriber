@@ -8,8 +8,10 @@ public sealed class PathGuard
 {
     private readonly string _root;
 
-    public PathGuard(string outputRoot)
-        => _root = Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+    public PathGuard(string outputRoot) =>
+        _root =
+            Path.GetFullPath(outputRoot).TrimEnd(Path.DirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
 
     public bool IsInside(string path)
     {

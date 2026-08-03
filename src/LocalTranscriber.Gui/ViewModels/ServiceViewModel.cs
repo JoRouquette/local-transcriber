@@ -33,20 +33,51 @@ public sealed partial class ServiceViewModel : ObservableObject
 
     public ObservableCollection<TranscriptionJob> Jobs { get; }
 
-    [ObservableProperty] private string _serviceStatus = "…";
-    [ObservableProperty] private bool _isRunning;
-    [ObservableProperty] private TranscriptionJob? _selectedJob;
+    [ObservableProperty]
+    private string _serviceStatus = "…";
+
+    [ObservableProperty]
+    private bool _isRunning;
+
+    [ObservableProperty]
+    private TranscriptionJob? _selectedJob;
 
     // ---- Environnement moteur (installeur leger) ----
     private readonly EngineSetup _engine = new();
-    [ObservableProperty] private bool _engineReady;
-    [ObservableProperty] private bool _isInstallingEngine;
-    [ObservableProperty] private string _engineSetupLog = "";
+
+    [ObservableProperty]
+    private bool _engineReady;
+
+    [ObservableProperty]
+    private bool _isInstallingEngine;
+
+    [ObservableProperty]
+    private string _engineSetupLog = "";
+
+    // ---- Monitoring de la file ----
+    [ObservableProperty]
+    private int _pendingCount;
+
+    [ObservableProperty]
+    private int _processingCount;
+
+    [ObservableProperty]
+    private int _doneCount;
+
+    [ObservableProperty]
+    private int _failedCount;
+
+    [ObservableProperty]
+    private string _currentFile = "—";
+
+    [ObservableProperty]
+    private string _lastError = "";
 
     [RelayCommand]
     private async Task InstallEngine()
     {
-        if (IsInstallingEngine) return;
+        if (IsInstallingEngine)
+            return;
         IsInstallingEngine = true;
         EngineSetupLog = "";
         var progress = new Progress<string>(line =>
@@ -56,10 +87,14 @@ public sealed partial class ServiceViewModel : ObservableObject
         });
         try
         {
-            _snackbar.Enqueue("Installation du moteur Python… (plusieurs minutes au premier lancement)");
+            _snackbar.Enqueue(
+                "Installation du moteur Python… (plusieurs minutes au premier lancement)"
+            );
             var ok = await _engine.SetupAsync(progress, cuda: false);
             EngineReady = _engine.IsReady;
-            _snackbar.Enqueue(ok ? "Moteur installé." : "Échec de l'installation (voir le journal ci-dessous).");
+            _snackbar.Enqueue(
+                ok ? "Moteur installé." : "Échec de l'installation (voir le journal ci-dessous)."
+            );
         }
         finally
         {
@@ -70,7 +105,8 @@ public sealed partial class ServiceViewModel : ObservableObject
     [RelayCommand]
     private void ReprocessFile()
     {
-        if (SelectedJob is null) return;
+        if (SelectedJob is null)
+            return;
         _settings.EnqueueCommand(CommandTypes.ReprocessFile, SelectedJob.AudioPath);
         _snackbar.Enqueue($"Retraitement demandé : {Path.GetFileName(SelectedJob.AudioPath)}");
     }
@@ -78,7 +114,10 @@ public sealed partial class ServiceViewModel : ObservableObject
     [RelayCommand]
     private async Task InstallService()
     {
-        await RunAsync(WindowsServiceControl.Install, "Activation du worker en arrière-plan (session utilisateur)…");
+        await RunAsync(
+            WindowsServiceControl.Install,
+            "Activation du worker en arrière-plan (session utilisateur)…"
+        );
     }
 
     [RelayCommand]
@@ -120,7 +159,36 @@ public sealed partial class ServiceViewModel : ObservableObject
 
         var jobs = await Task.Run(LoadJobs);
         Jobs.Clear();
-        foreach (var j in jobs) Jobs.Add(j);
+        foreach (var j in jobs)
+            Jobs.Add(j);
+
+        var summary = await Task.Run(LoadSummary);
+        if (summary is not null)
+        {
+            PendingCount = summary.Pending;
+            ProcessingCount = summary.Processing;
+            DoneCount = summary.Done;
+            FailedCount = summary.Failed;
+            CurrentFile = string.IsNullOrEmpty(summary.CurrentFile)
+                ? "—"
+                : Path.GetFileName(summary.CurrentFile);
+            LastError = string.IsNullOrEmpty(summary.LastError)
+                ? ""
+                : $"{Path.GetFileName(summary.LastErrorFile)} — {summary.LastError}";
+        }
+    }
+
+    private JobSummary? LoadSummary()
+    {
+        try
+        {
+            var db = Path.Combine(ConfigStore.ExpandPath(_settings.Config.DataDir), "jobs.db");
+            return File.Exists(db) ? new JobStore(db).Summarize() : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private IReadOnlyList<TranscriptionJob> LoadJobs()
@@ -128,7 +196,8 @@ public sealed partial class ServiceViewModel : ObservableObject
         try
         {
             var db = Path.Combine(ConfigStore.ExpandPath(_settings.Config.DataDir), "jobs.db");
-            if (!File.Exists(db)) return Array.Empty<TranscriptionJob>();
+            if (!File.Exists(db))
+                return Array.Empty<TranscriptionJob>();
             return new JobStore(db).ListRecent(50);
         }
         catch

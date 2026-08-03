@@ -32,12 +32,19 @@ public sealed class Worker : BackgroundService
     private string _enginePath = "";
 
     // Cache (chemin -> taille+date) pour eviter de re-hasher les fichiers inchanges a chaque scan.
-    private readonly Dictionary<string, (long Size, long Mtime)> _seen = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (long Size, long Mtime)> _seen = new(
+        StringComparer.OrdinalIgnoreCase
+    );
     private readonly EngineSetup _engineSetup = new();
     private bool _quietLogged;
     private bool _engineMissingLogged;
 
-    public Worker(ILogger<Worker> logger, TranscriptIndex index, VectorStore vectors, EmbeddingClient embedder)
+    public Worker(
+        ILogger<Worker> logger,
+        TranscriptIndex index,
+        VectorStore vectors,
+        EmbeddingClient embedder
+    )
     {
         _logger = logger;
         _index = index;
@@ -61,7 +68,10 @@ public sealed class Worker : BackgroundService
             try
             {
                 ReloadConfigIfChanged();
-                if (string.IsNullOrWhiteSpace(_config.WatchRoot) || string.IsNullOrWhiteSpace(_config.OutputRoot))
+                if (
+                    string.IsNullOrWhiteSpace(_config.WatchRoot)
+                    || string.IsNullOrWhiteSpace(_config.OutputRoot)
+                )
                 {
                     await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
                     continue;
@@ -77,7 +87,9 @@ public sealed class Worker : BackgroundService
                 {
                     if (!_engineMissingLogged)
                     {
-                        _logger.LogWarning("Moteur Python non installe. Installez-le depuis l'application (onglet Service & File).");
+                        _logger.LogWarning(
+                            "Moteur Python non installe. Installez-le depuis l'application (onglet Service & File)."
+                        );
                         _engineMissingLogged = true;
                     }
                 }
@@ -85,7 +97,9 @@ public sealed class Worker : BackgroundService
                 {
                     if (!_quietLogged)
                     {
-                        _logger.LogInformation("Heures d'inactivite : traitement en pause (detection/mise en file maintenues).");
+                        _logger.LogInformation(
+                            "Heures d'inactivite : traitement en pause (detection/mise en file maintenues)."
+                        );
                         _quietLogged = true;
                     }
                 }
@@ -95,21 +109,32 @@ public sealed class Worker : BackgroundService
                     _quietLogged = false;
 
                     if (_config.SemanticEnabled)
-                        await _sidecar.EnsureStartedAsync(_enginePath, _config.EmbeddingSidecarPort,
-                            ConfigStore.ExpandPath(_config.ModelCacheDir), _config.EmbeddingDevice, stoppingToken);
+                        await _sidecar.EnsureStartedAsync(
+                            _enginePath,
+                            _config.EmbeddingSidecarPort,
+                            ConfigStore.ExpandPath(_config.ModelCacheDir),
+                            _config.EmbeddingDevice,
+                            stoppingToken
+                        );
 
                     await ProcessQueueAsync(stoppingToken);
                     if (_config.SemanticEnabled)
                         await ReconcileVectorsAsync(outputRoot, 5, stoppingToken);
                 }
             }
-            catch (OperationCanceledException) { break; }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erreur dans la boucle principale.");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(Math.Max(2, _config.StabilizationSeconds)), stoppingToken);
+            await Task.Delay(
+                TimeSpan.FromSeconds(Math.Max(2, _config.StabilizationSeconds)),
+                stoppingToken
+            );
         }
 
         _sidecar.Dispose();
@@ -119,9 +144,11 @@ public sealed class Worker : BackgroundService
     private void ReloadConfigIfChanged()
     {
         var path = ConfigStore.DefaultConfigPath;
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path))
+            return;
         var mtime = File.GetLastWriteTimeUtc(path);
-        if (mtime == _configMtime && _jobs != null) return;
+        if (mtime == _configMtime && _jobs != null)
+            return;
 
         _config = ConfigStore.Load(path);
         _configMtime = mtime;
@@ -143,7 +170,9 @@ public sealed class Worker : BackgroundService
     private string ResolveEnginePath(string configured)
     {
         var p = ConfigStore.ExpandPath(configured);
-        var resolved = Path.IsPathRooted(p) ? p : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, p));
+        var resolved = Path.IsPathRooted(p)
+            ? p
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, p));
         // Si l'exe configure n'existe pas (installeur leger : moteur pas encore installe),
         // on retombe sur l'executable de l'environnement Python mis en place au 1er lancement.
         return File.Exists(resolved) ? resolved : _engineSetup.ConsoleExe;
@@ -152,11 +181,13 @@ public sealed class Worker : BackgroundService
     private string? LoadHfToken()
     {
         // 1. Parametres de l'application (recommande).
-        if (!string.IsNullOrWhiteSpace(_config.HfToken)) return _config.HfToken.Trim();
+        if (!string.IsNullOrWhiteSpace(_config.HfToken))
+            return _config.HfToken.Trim();
 
         // 2. Repli : variable d'environnement.
         var fromEnv = Environment.GetEnvironmentVariable("HF_TOKEN");
-        if (!string.IsNullOrWhiteSpace(fromEnv)) return fromEnv;
+        if (!string.IsNullOrWhiteSpace(fromEnv))
+            return fromEnv;
 
         var envFile = Path.Combine(AppContext.BaseDirectory, ".env");
         if (File.Exists(envFile))
@@ -171,31 +202,50 @@ public sealed class Worker : BackgroundService
 
     private void ScanAndEnqueue()
     {
-        if (_jobs is null) return;
+        if (_jobs is null)
+            return;
         var watchRoot = ConfigStore.ExpandPath(_config.WatchRoot);
         var outputRoot = ConfigStore.ExpandPath(_config.OutputRoot);
-        if (!Directory.Exists(watchRoot)) return;
+        if (!Directory.Exists(watchRoot))
+            return;
 
         var extensions = new HashSet<string>(_config.FileTypes, StringComparer.OrdinalIgnoreCase);
-        var voicesDirNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { _config.SpeakerIdentification.VoicesDirName };
+        var voicesDirNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            _config.SpeakerIdentification.VoicesDirName,
+        };
         foreach (var p in _config.Projects.Where(p => p.SpeakerIdentification != null))
             voicesDirNames.Add(p.SpeakerIdentification!.VoicesDirName);
 
-        foreach (var file in Directory.EnumerateFiles(watchRoot, "*.*", SearchOption.AllDirectories))
+        foreach (
+            var file in Directory.EnumerateFiles(watchRoot, "*.*", SearchOption.AllDirectories)
+        )
         {
-            if (!extensions.Contains(Path.GetExtension(file))) continue;
-            if (file.Split(Path.DirectorySeparatorChar).Any(seg => voicesDirNames.Contains(seg))) continue;
+            if (!extensions.Contains(Path.GetExtension(file)))
+                continue;
+            if (file.Split(Path.DirectorySeparatorChar).Any(seg => voicesDirNames.Contains(seg)))
+                continue;
 
             FileInfo info;
-            try { info = new FileInfo(file); } catch { continue; }
+            try
+            {
+                info = new FileInfo(file);
+            }
+            catch
+            {
+                continue;
+            }
             var key = (info.Length, info.LastWriteTimeUtc.Ticks);
             // Deja pris en compte et inchange -> on evite de re-hasher (economie CPU/IO).
-            if (_seen.TryGetValue(file, out var prev) && prev == key) continue;
+            if (_seen.TryGetValue(file, out var prev) && prev == key)
+                continue;
 
-            if (!IsStable(file)) continue;
+            if (!IsStable(file))
+                continue;
 
             var project = PathResolver.FindProject(_config, file);
-            if (project is { Enabled: false }) continue;
+            if (project is { Enabled: false })
+                continue;
 
             try
             {
@@ -208,21 +258,27 @@ public sealed class Worker : BackgroundService
                 }
                 _seen[file] = key; // memorise (connu ou nouvellement enfile) pour ne plus re-hasher
             }
-            catch (IOException) { /* encore en ecriture */ }
+            catch (IOException)
+            { /* encore en ecriture */
+            }
         }
     }
 
     /// <summary>Applique les commandes de la GUI (retraiter un fichier / un projet).</summary>
     private void DrainCommands()
     {
-        if (_commands is null || _jobs is null) return;
+        if (_commands is null || _jobs is null)
+            return;
         var watchRoot = ConfigStore.ExpandPath(_config.WatchRoot);
 
         foreach (var cmd in _commands.Drain())
         {
             try
             {
-                if (cmd.Type == CommandTypes.ReprocessFile && !string.IsNullOrWhiteSpace(cmd.Payload))
+                if (
+                    cmd.Type == CommandTypes.ReprocessFile
+                    && !string.IsNullOrWhiteSpace(cmd.Payload)
+                )
                 {
                     _jobs.DeleteByPath(cmd.Payload);
                     _seen.Remove(cmd.Payload);
@@ -232,7 +288,11 @@ public sealed class Worker : BackgroundService
                 {
                     var dir = Path.GetFullPath(Path.Combine(watchRoot, cmd.Payload));
                     _jobs.DeleteUnderPath(dir);
-                    foreach (var k in _seen.Keys.Where(k => k.StartsWith(dir, StringComparison.OrdinalIgnoreCase)).ToList())
+                    foreach (
+                        var k in _seen
+                            .Keys.Where(k => k.StartsWith(dir, StringComparison.OrdinalIgnoreCase))
+                            .ToList()
+                    )
                         _seen.Remove(k);
                     _logger.LogInformation("Retraitement du projet demande : {Dir}", dir);
                 }
@@ -249,16 +309,21 @@ public sealed class Worker : BackgroundService
         try
         {
             var info = new FileInfo(path);
-            if (info.LastWriteTimeUtc > DateTime.UtcNow.AddSeconds(-_config.StabilizationSeconds)) return false;
+            if (info.LastWriteTimeUtc > DateTime.UtcNow.AddSeconds(-_config.StabilizationSeconds))
+                return false;
             using var _ = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
             return true;
         }
-        catch { return false; }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task ProcessQueueAsync(CancellationToken ct)
     {
-        if (_jobs is null || _runner is null) return;
+        if (_jobs is null || _runner is null)
+            return;
 
         TranscriptionJob? job;
         while (!ct.IsCancellationRequested && (job = _jobs.DequeueNext()) is not null)
@@ -270,8 +335,12 @@ public sealed class Worker : BackgroundService
             if (result.IsSuccess)
             {
                 _jobs.MarkDone(job.Id);
-                _logger.LogInformation("OK : {File} ({Segments} segments, {Speakers} locuteurs)",
-                    job.AudioPath, result.SegmentCount, result.SpeakerCount);
+                _logger.LogInformation(
+                    "OK : {File} ({Segments} segments, {Speakers} locuteurs)",
+                    job.AudioPath,
+                    result.SegmentCount,
+                    result.SpeakerCount
+                );
 
                 if (_config.SemanticEnabled && result.JsonPath is { } jp && File.Exists(jp))
                     await VectorizeAsync(jp, ConfigStore.ExpandPath(_config.OutputRoot), ct);
@@ -286,30 +355,49 @@ public sealed class Worker : BackgroundService
 
     private async Task ReconcileVectorsAsync(string outputRoot, int max, CancellationToken ct)
     {
-        if (!Directory.Exists(outputRoot)) return;
+        if (!Directory.Exists(outputRoot))
+            return;
         var done = 0;
-        foreach (var json in Directory.EnumerateFiles(outputRoot, "*.json", SearchOption.AllDirectories))
+        foreach (
+            var json in Directory.EnumerateFiles(outputRoot, "*.json", SearchOption.AllDirectories)
+        )
         {
-            if (done >= max || ct.IsCancellationRequested) break;
+            if (done >= max || ct.IsCancellationRequested)
+                break;
             var mtime = File.GetLastWriteTimeUtc(json).ToString("o");
-            if (_vectors.IsUpToDate(json, mtime)) continue;
-            if (await VectorizeAsync(json, outputRoot, ct)) done++;
+            if (_vectors.IsUpToDate(json, mtime))
+                continue;
+            if (await VectorizeAsync(json, outputRoot, ct))
+                done++;
         }
     }
 
-    private async Task<bool> VectorizeAsync(string jsonPath, string outputRoot, CancellationToken ct)
+    private async Task<bool> VectorizeAsync(
+        string jsonPath,
+        string outputRoot,
+        CancellationToken ct
+    )
     {
         try
         {
             var mtime = File.GetLastWriteTimeUtc(jsonPath).ToString("o");
             var segments = TranscriptReader.ReadSegments(jsonPath);
-            var chunks = Chunker.Chunk(segments, _config.ChunkMaxChars, _config.ChunkOverlapSegments);
-            if (chunks.Count == 0) return false;
+            var chunks = Chunker.Chunk(
+                segments,
+                _config.ChunkMaxChars,
+                _config.ChunkOverlapSegments
+            );
+            if (chunks.Count == 0)
+                return false;
 
             var resp = await _embedder.EmbedAsync(chunks.Select(c => c.Text), "passage", ct);
             if (!resp.IsSuccess || resp.Vectors.Count != chunks.Count)
             {
-                _logger.LogWarning("Embeddings indisponibles pour {File} ({Error})", jsonPath, resp.Error ?? "compte incoherent");
+                _logger.LogWarning(
+                    "Embeddings indisponibles pour {File} ({Error})",
+                    jsonPath,
+                    resp.Error ?? "compte incoherent"
+                );
                 return false;
             }
 
@@ -325,10 +413,17 @@ public sealed class Worker : BackgroundService
         }
     }
 
-    private static (string Project, string BaseName) DeriveProject(string outputRoot, string jsonPath)
+    private static (string Project, string BaseName) DeriveProject(
+        string outputRoot,
+        string jsonPath
+    )
     {
         var relDir = Path.GetDirectoryName(Path.GetRelativePath(outputRoot, jsonPath)) ?? "";
-        var project = relDir.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "(racine)";
+        var project =
+            relDir
+                .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault()
+            ?? "(racine)";
         return (project, Path.GetFileNameWithoutExtension(jsonPath));
     }
 
@@ -361,6 +456,10 @@ public sealed class Worker : BackgroundService
             OutputSrt = s.Outputs.Srt,
             OutputText = s.Outputs.Text,
             ModelCacheDir = ConfigStore.ExpandPath(_config.ModelCacheDir),
+            ChunkingEnabled = _config.Chunking.Enabled,
+            ChunkThresholdMinutes = _config.Chunking.ThresholdMinutes,
+            ChunkMinutes = _config.Chunking.ChunkMinutes,
+            ChunkMinSilenceSeconds = _config.Chunking.MinSilenceSeconds,
         };
     }
 }

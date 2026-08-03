@@ -43,4 +43,10 @@ public sealed class EngineRequest
     public bool OutputText { get; set; } = true;
 
     public string ModelCacheDir { get; set; } = "";
+
+    // Découpe par silence des fichiers longs (transcription par chunks).
+    public bool ChunkingEnabled { get; set; }
+    public int ChunkThresholdMinutes { get; set; } = 20;
+    public int ChunkMinutes { get; set; } = 10;
+    public double ChunkMinSilenceSeconds { get; set; } = 0.5;
 }

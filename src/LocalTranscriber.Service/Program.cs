@@ -26,13 +26,14 @@ builder.Services.AddSingleton(new EmbeddingClient(config.EmbeddingSidecarPort));
 builder.Services.AddSingleton(sp => new HybridSearch(
     sp.GetRequiredService<TranscriptIndex>(),
     sp.GetRequiredService<VectorStore>(),
-    sp.GetRequiredService<EmbeddingClient>()));
+    sp.GetRequiredService<EmbeddingClient>()
+));
 builder.Services.AddSingleton(new OutputLocation(ConfigStore.ExpandPath(config.OutputRoot)));
 
 builder.Services.AddHostedService<Worker>();
 
-builder.Services
-    .AddMcpServer()
+builder
+    .Services.AddMcpServer()
     .WithHttpTransport()
     .WithToolsFromAssembly(typeof(TranscriptTools).Assembly)
     .WithResourcesFromAssembly(typeof(TranscriptResources).Assembly);

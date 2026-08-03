@@ -32,6 +32,19 @@ public sealed class OutputConfig
 }
 
 /// <summary>
+/// Découpe des fichiers longs avant transcription : au-delà du seuil, l'audio est coupé
+/// aux silences en chunks (transcrits séparément puis fusionnés). L'alignement et la
+/// diarisation restent réalisés sur le fichier entier.
+/// </summary>
+public sealed class ChunkingConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int ThresholdMinutes { get; set; } = 20;
+    public int ChunkMinutes { get; set; } = 10;
+    public double MinSilenceSeconds { get; set; } = 0.5;
+}
+
+/// <summary>
 /// Configuration d'un projet. Les sous-objets nuls heritent des reglages globaux
 /// (voir <see cref="AppConfig.EffectiveFor"/>).
 /// </summary>
@@ -68,12 +81,14 @@ public sealed record EffectiveSettings(
     EngineConfig Engine,
     DiarizationConfig Diarization,
     SpeakerIdConfig SpeakerId,
-    OutputConfig Outputs);
+    OutputConfig Outputs
+);
 
 public sealed class AppConfig
 {
     public string WatchRoot { get; set; } = "";
     public string OutputRoot { get; set; } = "";
+
     // Emplacements machine-wide (%PROGRAMDATA%) : la GUI (utilisateur) et le service
     // (LocalSystem) doivent resoudre EXACTEMENT les memes chemins. %LOCALAPPDATA% ne
     // convient pas car il pointe vers le profil systeme cote service.
@@ -91,10 +106,8 @@ public sealed class AppConfig
     /// </summary>
     public string? HfToken { get; set; }
 
-    public List<string> FileTypes { get; set; } = new()
-    {
-        ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac"
-    };
+    public List<string> FileTypes { get; set; } =
+        new() { ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" };
 
     public int StabilizationSeconds { get; set; } = 5;
     public int MaxParallelJobs { get; set; } = 1;
@@ -112,6 +125,7 @@ public sealed class AppConfig
     public DiarizationConfig Diarization { get; set; } = new();
     public SpeakerIdConfig SpeakerIdentification { get; set; } = new();
     public OutputConfig Outputs { get; set; } = new();
+    public ChunkingConfig Chunking { get; set; } = new();
 
     public List<ProjectConfig> Projects { get; set; } = new();
 
@@ -119,11 +133,13 @@ public sealed class AppConfig
     public List<QuietPeriod> QuietHours { get; set; } = new();
 
     /// <summary>Fusionne les reglages globaux avec les surcharges d'un projet.</summary>
-    public EffectiveSettings EffectiveFor(ProjectConfig? project) => new(
-        project?.Engine ?? Engine,
-        project?.Diarization ?? Diarization,
-        project?.SpeakerIdentification ?? SpeakerIdentification,
-        project?.Outputs ?? Outputs);
+    public EffectiveSettings EffectiveFor(ProjectConfig? project) =>
+        new(
+            project?.Engine ?? Engine,
+            project?.Diarization ?? Diarization,
+            project?.SpeakerIdentification ?? SpeakerIdentification,
+            project?.Outputs ?? Outputs
+        );
 
     /// <summary>Indique si l'instant donne tombe dans une plage d'inactivite.</summary>
     public bool IsQuietNow(DateTime now)
@@ -138,29 +154,35 @@ public sealed class AppConfig
                 continue;
 
             bool allDays = p.Days is null || p.Days.Count == 0;
-            bool DayIn(string d) => allDays || p.Days!.Any(x => string.Equals(x, d, StringComparison.OrdinalIgnoreCase));
+            bool DayIn(string d) =>
+                allDays
+                || p.Days!.Any(x => string.Equals(x, d, StringComparison.OrdinalIgnoreCase));
 
             if (s <= e)
             {
-                if (DayIn(today) && t >= s && t < e) return true;
+                if (DayIn(today) && t >= s && t < e)
+                    return true;
             }
             else // passe minuit : [s,24h) le jour de debut, [0,e) le lendemain
             {
-                if (DayIn(today) && t >= s) return true;
-                if (DayIn(yesterday) && t < e) return true;
+                if (DayIn(today) && t >= s)
+                    return true;
+                if (DayIn(yesterday) && t < e)
+                    return true;
             }
         }
         return false;
     }
 
-    private static string DayKey(DayOfWeek d) => d switch
-    {
-        DayOfWeek.Monday => "mon",
-        DayOfWeek.Tuesday => "tue",
-        DayOfWeek.Wednesday => "wed",
-        DayOfWeek.Thursday => "thu",
-        DayOfWeek.Friday => "fri",
-        DayOfWeek.Saturday => "sat",
-        _ => "sun",
-    };
+    private static string DayKey(DayOfWeek d) =>
+        d switch
+        {
+            DayOfWeek.Monday => "mon",
+            DayOfWeek.Tuesday => "tue",
+            DayOfWeek.Wednesday => "wed",
+            DayOfWeek.Thursday => "thu",
+            DayOfWeek.Friday => "fri",
+            DayOfWeek.Saturday => "sat",
+            _ => "sun",
+        };
 }
