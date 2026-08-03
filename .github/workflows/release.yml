@@ -57,6 +57,11 @@ jobs:
 
       - name: Build installeur leger (.NET + source moteur + uv + pack Velopack)
         shell: pwsh
+        env:
+          # Signature de code : si les secrets sont definis, build.ps1 signe l'installeur.
+          # Sinon (secrets absents) le build reste non signe, sans echouer.
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
         run: .\build\build.ps1 -Version ${{ needs.version.outputs.version }} -ReleaseNotes notes.md
 
       - name: Publier la release GitHub + assets (auto-update Velopack)

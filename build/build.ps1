@@ -11,11 +11,19 @@
 #>
 param(
     [string]$Version = "0.1.0",
-    [string]$ReleaseNotes
+    [string]$ReleaseNotes,
+    # Signature de code (optionnelle) : PFX encode en base64 + mot de passe.
+    # Si absent, l'installeur n'est pas signe (build normal).
+    [string]$PfxBase64,
+    [string]$PfxPassword
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+
+# Repli sur les variables d'environnement (utilise par la CI via les secrets GitHub).
+if (-not $PfxBase64)   { $PfxBase64   = $env:SIGNING_PFX_BASE64 }
+if (-not $PfxPassword) { $PfxPassword = $env:SIGNING_PFX_PASSWORD }
 $publish = Join-Path $root "build\publish"
 $releases = Join-Path $root "build\Releases"
 
@@ -60,6 +68,19 @@ $packArgs = @(
 if ($ReleaseNotes -and (Test-Path $ReleaseNotes)) {
     $packArgs += @("--releaseNotes", (Resolve-Path $ReleaseNotes).Path)
 }
+
+# Signature de code (si un PFX est fourni) : Velopack signe les binaires .NET et le
+# Setup.exe via signtool. Timestamp inclus pour que la signature survive a l'expiration.
+if ($PfxBase64) {
+    Write-Host "==> Signature de code activee" -ForegroundColor Cyan
+    $pfxPath = Join-Path $env:TEMP "lt-codesign.pfx"
+    [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($PfxBase64))
+    $signParams = "/fd sha256 /f `"$pfxPath`" /p `"$PfxPassword`" /tr http://timestamp.digicert.com /td sha256"
+    $packArgs += @("--signParams", $signParams)
+}
+
 vpk @packArgs
+
+if ($PfxBase64) { Remove-Item (Join-Path $env:TEMP "lt-codesign.pfx") -Force -ErrorAction SilentlyContinue }
 
 Write-Host "OK -> installeur (leger) dans $releases" -ForegroundColor Green

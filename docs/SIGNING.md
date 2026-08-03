@@ -1,9 +1,39 @@
-# Signature de code — SignPath Foundation (gratuit, open source)
+# Signature de code
 
-L'installeur `LocalTranscriber-win-Setup.exe` n'est pas signé : Windows SmartScreen
-affiche donc « Éditeur inconnu ». La signature Authenticode supprime cet avertissement.
+Deux voies en place : un **certificat auto-signé** (immédiat, pour les machines de confiance)
+et, à terme, **SignPath Foundation** (publiquement reconnu, dès approbation).
 
-Voie retenue : **SignPath Foundation**, qui fournit **gratuitement** un certificat de
+## Voie 1 — Certificat auto-signé (actif)
+
+Le certificat de signature (thumbprint dans le magasin `Cert:\CurrentUser\My`, nom
+« LocalTranscriber Code Signing ») a été généré via `New-SelfSignedCertificate`. Le PFX et
+sa version base64 + mot de passe se trouvent sous `C:\ProgramData\LocalTranscriber-signing\`
+sur le poste du mainteneur (à sécuriser / supprimer après import dans les secrets).
+
+**Secrets GitHub à définir** (repo → Settings → Secrets and variables → Actions) :
+
+- `SIGNING_PFX_BASE64` : contenu de `PFX_BASE64.txt`.
+- `SIGNING_PFX_PASSWORD` : contenu de `PFX_PASSWORD.txt`.
+
+Une fois définis, la CI signe automatiquement l'installeur (via `build.ps1` →
+`vpk pack --signParams`, avec horodatage DigiCert). Sans ces secrets, le build reste non signé.
+
+**Faire confiance au certificat** sur une machine (PowerShell **en administrateur**) — sinon
+la signature auto-signée reste « non approuvée » :
+
+```powershell
+$cer = "C:\ProgramData\LocalTranscriber-signing\lt-codesign.cer"
+Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\Root
+Import-Certificate -FilePath $cer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher
+```
+
+Limite : un certificat auto-signé n'est reconnu que sur les machines où il est approuvé
+(ton poste, ou un parc via GPO). Sur une machine tierce, la signature apparaît « non
+approuvée ». D'où la voie 2 pour une diffusion large.
+
+## Voie 2 — SignPath Foundation (gratuit, open source)
+
+Fournit **gratuitement** un certificat de
 signature aux projets open source, avec la clé privée dans leur HSM et une intégration
 GitHub Actions. Le certificat est de type OV (le nom de l'éditeur s'affiche) ; la
 réputation SmartScreen continue de se construire avec les téléchargements, mais

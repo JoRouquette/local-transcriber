@@ -214,4 +214,10 @@ Ce projet est distribué sous licence **MIT** (voir `LICENSE`).
 
 Composants tous gratuits et open source : WhisperX (BSD), faster-whisper/CTranslate2 (MIT), pyannote.audio (MIT, modèles sous conditions Hugging Face), SDK MCP C# (MIT), Velopack (MIT). Les poids Whisper sont sous licence MIT (OpenAI).
 
-**Signature de code** : l'installeur n'est pas encore signé (SmartScreen affiche « Éditeur inconnu » — cliquer *Informations complémentaires* → *Exécuter quand même*). La mise en place d'une signature gratuite via **SignPath Foundation** est décrite dans `docs/SIGNING.md`.
+## Code signing policy
+
+Les binaires publiés sont actuellement signés avec un **certificat auto-signé** du projet : les machines qui approuvent ce certificat (le poste du mainteneur et, le cas échéant, un parc déployant le certificat via GPO) ne voient plus « Éditeur inconnu ». Sur les autres machines, SmartScreen peut encore avertir (cliquer *Informations complémentaires* → *Exécuter quand même*). Le passage à une signature **publiquement reconnue via [SignPath Foundation](https://signpath.org)** (« Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by SignPath Foundation ») est prévu dès l'approbation du projet. Détails : `docs/SIGNING.md`.
+
+**Rôles de l'équipe** (projet mono-mainteneur) : *Author*, *Reviewer* et *Approver* = [@JoRouquette](https://github.com/JoRouquette) (propriétaire du dépôt). Toute contribution externe (pull request) est relue par le mainteneur ; chaque release à signer est approuvée manuellement.
+
+**Politique de confidentialité** : ce programme ne transfère aucune donnée vers un système tiers, sauf action explicite de l'utilisateur ou de la personne qui l'installe/l'exploite (le seul trafic réseau est le téléchargement initial des modèles de transcription et, si la diarisation est activée, l'accès à Hugging Face avec le jeton fourni par l'utilisateur).
