@@ -78,7 +78,7 @@ public sealed partial class ServiceViewModel : ObservableObject
     [RelayCommand]
     private async Task InstallService()
     {
-        await RunAsync(WindowsServiceControl.Install, "Installation du service (autorisez l'UAC)…");
+        await RunAsync(WindowsServiceControl.Install, "Activation du worker en arrière-plan (session utilisateur)…");
     }
 
     [RelayCommand]

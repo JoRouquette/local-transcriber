@@ -95,7 +95,7 @@ Lancez l'installeur `LocalTranscriber-Setup.exe` de `build\Releases\`. Velopack 
 Ensuite, dans la GUI, onglet **Service & File** :
 
 1. **Installer / réinstaller le moteur** — au premier lancement, met en place l'environnement Python (uv installe Python 3.11 + PyTorch + dépendances). Nécessite une connexion Internet ; plusieurs minutes. Le journal s'affiche pendant l'installation.
-2. **Installer le service** puis **Démarrer** (déclenche l'UAC — le service tourne en tâche de fond, au démarrage de Windows).
+2. **Installer** puis **Démarrer** : le worker tourne en tâche de fond dans **votre session** (tâche planifiée « à l'ouverture de session », sans droits admin ni UAC). Ce choix évite le mode service LocalSystem que certains EDR (ex. SentinelOne) bloquent pour un binaire non signé par un éditeur reconnu. Contrepartie : le worker démarre à **votre ouverture de session** (pas avant votre connexion).
 
 Tant que le moteur n'est pas installé, le service détecte et met en file les audios mais ne lance aucune transcription.
 
