@@ -26,8 +26,8 @@
       materialDesign:ElevationAssist.Elevation="Dp2"
     >
       <StackPanel>
-        <DockPanel>
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <WrapPanel>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
             <materialDesign:PackIcon
               Width="18"
               Height="18"
@@ -60,11 +60,7 @@
               FontWeight="Medium"
             />
           </StackPanel>
-          <StackPanel
-            DockPanel.Dock="Right"
-            Orientation="Horizontal"
-            HorizontalAlignment="Right"
-          >
+          <WrapPanel Orientation="Horizontal">
             <Button
               Style="{StaticResource MaterialDesignRaisedButton}"
               Command="{Binding UpdateEngineCommand}"
@@ -80,8 +76,8 @@
               Content="Réinstaller proprement"
               ToolTip="Efface puis recrée l'environnement de zéro (plusieurs minutes)."
             />
-          </StackPanel>
-        </DockPanel>
+          </WrapPanel>
+        </WrapPanel>
 
         <ProgressBar
           Style="{StaticResource MaterialDesignLinearProgressBar}"
@@ -142,8 +138,8 @@
       Margin="0,12"
       materialDesign:ElevationAssist.Elevation="Dp2"
     >
-      <DockPanel>
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+      <WrapPanel>
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
           <materialDesign:PackIcon Kind="Circle" Width="16" Height="16" VerticalAlignment="Center">
             <materialDesign:PackIcon.Style>
               <Style TargetType="materialDesign:PackIcon">
@@ -164,7 +160,7 @@
           />
         </StackPanel>
 
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+        <WrapPanel Orientation="Horizontal">
           <Button
             Style="{StaticResource MaterialDesignOutlinedButton}"
             Command="{Binding InstallServiceCommand}"
@@ -198,8 +194,8 @@
           >
             <materialDesign:PackIcon Kind="Refresh" />
           </Button>
-        </StackPanel>
-      </DockPanel>
+        </WrapPanel>
+      </WrapPanel>
     </materialDesign:Card>
 
     <!-- Monitoring de la file + santé des services -->
@@ -291,24 +287,41 @@
           </StackPanel>
         </WrapPanel>
 
-        <DockPanel Margin="0,6,0,0">
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Grid Margin="0,6,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <!-- Bloc d'info : libellé et durée en Auto, seul le chemin se tronque -->
+          <Grid Grid.Column="0" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto" />
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
             <TextBlock
+              Grid.Column="0"
               Text="Fichier en cours : "
+              VerticalAlignment="Center"
               Foreground="{DynamicResource MaterialDesignBodyLight}"
             />
-            <TextBlock Text="{Binding CurrentFile}" FontWeight="Medium" />
             <TextBlock
+              Grid.Column="1"
+              Text="{Binding CurrentFile}"
+              FontWeight="Medium"
+              VerticalAlignment="Center"
+              TextTrimming="CharacterEllipsis"
+              ToolTip="{Binding CurrentFile}"
+            />
+            <TextBlock
+              Grid.Column="2"
               Text="{Binding CurrentElapsed}"
+              VerticalAlignment="Center"
               Margin="10,0,0,0"
               Foreground="{DynamicResource MaterialDesignBodyLight}"
             />
-          </StackPanel>
-          <StackPanel
-            DockPanel.Dock="Right"
-            Orientation="Horizontal"
-            HorizontalAlignment="Right"
-          >
+          </Grid>
+          <WrapPanel Grid.Column="1" VerticalAlignment="Center">
             <Button
               Style="{StaticResource MaterialDesignFlatButton}"
               Command="{Binding ReprocessFileCommand}"
@@ -342,8 +355,8 @@
                 <TextBlock Text="Annuler" VerticalAlignment="Center" />
               </StackPanel>
             </Button>
-          </StackPanel>
-        </DockPanel>
+          </WrapPanel>
+        </Grid>
 
         <TextBlock
           Text="{Binding LastError}"

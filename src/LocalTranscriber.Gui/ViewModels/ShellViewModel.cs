@@ -51,6 +51,16 @@ public sealed partial class ShellViewModel : ObservableObject
     [ObservableProperty]
     private bool _isDark;
 
+    /// <summary>
+    /// Rail de navigation réduit à ses icônes (piloté par la largeur de la fenêtre, voir
+    /// MainWindow). <see cref="IsRailExpanded"/> est l'inverse, pour la visibilité des libellés.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsRailExpanded))]
+    private bool _isRailCollapsed;
+
+    public bool IsRailExpanded => !IsRailCollapsed;
+
     public object CurrentPage => SelectedNavItem.Page;
 
     partial void OnSelectedNavItemChanged(NavItem value) => OnPropertyChanged(nameof(CurrentPage));
