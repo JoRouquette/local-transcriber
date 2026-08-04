@@ -13,6 +13,9 @@ public sealed class SidecarManager : IDisposable
     private readonly ILogger _logger;
     private Process? _proc;
 
+    /// <summary>Reçoit les lignes de log du sidecar (pour le journal fichier / la GUI).</summary>
+    public Action<string>? OnLog { get; set; }
+
     public SidecarManager(ILogger logger) => _logger = logger;
 
     public bool IsRunning => _proc is { HasExited: false };
@@ -55,16 +58,23 @@ public sealed class SidecarManager : IDisposable
             psi.ArgumentList.Add(cacheDir);
         }
 
+        // Libere l'ancienne instance (processus deja sorti) avant de reaffecter, pour ne pas
+        // fuir le handle de process a chaque redemarrage du sidecar.
+        _proc?.Dispose();
         _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _proc.OutputDataReceived += (_, e) =>
         {
-            if (e.Data != null)
-                _logger.LogDebug("[embeddings] {Line}", e.Data);
+            if (e.Data == null)
+                return;
+            _logger.LogDebug("[embeddings] {Line}", e.Data);
+            OnLog?.Invoke("[embeddings] " + e.Data);
         };
         _proc.ErrorDataReceived += (_, e) =>
         {
-            if (e.Data != null)
-                _logger.LogDebug("[embeddings] {Line}", e.Data);
+            if (e.Data == null)
+                return;
+            _logger.LogDebug("[embeddings] {Line}", e.Data);
+            OnLog?.Invoke("[embeddings] " + e.Data);
         };
         _proc.Start();
         _proc.BeginOutputReadLine();

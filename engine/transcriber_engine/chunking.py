@@ -33,7 +33,10 @@ def silence_split_points(
     pad = (-n) % frame
     a = np.concatenate([audio, np.zeros(pad, dtype=audio.dtype)]) if pad else audio
     frames = a.reshape(-1, frame)
-    rms = np.sqrt(np.mean(frames.astype(np.float64) ** 2, axis=1) + 1e-12)
+    # Calcul en float32 : evite le pic memoire d'une copie float64 des frames
+    # sur les longs audios, le RMS reste correct a cette precision.
+    frames32 = frames.astype(np.float32, copy=False)
+    rms = np.sqrt(np.mean(frames32 * frames32, axis=1, dtype=np.float32) + 1e-12)
     ref = float(rms.max()) + 1e-12
     db = 20.0 * np.log10(rms / ref + 1e-12)
     silent = db < silence_db

@@ -87,15 +87,17 @@ def write_markdown(
         (sp.get("name") or sp.get("label")) for sp in speakers
     ) if speakers else "n/a"
 
+    # json.dumps produit une scalaire JSON (guillemets + echappement) qui est un
+    # YAML valide : evite qu'un " dans source_file/speakers casse le frontmatter.
     lines: list[str] = []
     lines.append("---")
-    lines.append(f'source: "{meta.get("source_file", "")}"')
-    lines.append(f'transcribed_at: "{meta.get("transcribed_at", "")}"')
-    lines.append(f'language: "{meta.get("language", "")}"')
-    lines.append(f'duration: "{_fmt_ts(meta.get("duration_seconds", 0.0))}"')
+    lines.append(f'source: {json.dumps(str(meta.get("source_file", "")))}')
+    lines.append(f'transcribed_at: {json.dumps(str(meta.get("transcribed_at", "")))}')
+    lines.append(f'language: {json.dumps(str(meta.get("language", "")))}')
+    lines.append(f'duration: {json.dumps(_fmt_ts(meta.get("duration_seconds", 0.0)))}')
     lines.append(f"speaker_count: {meta.get('speaker_count', 0)}")
-    lines.append(f'speakers: "{speaker_line}"')
-    lines.append(f'engine: "whisperx {meta.get("model_size", "")}"')
+    lines.append(f'speakers: {json.dumps(speaker_line)}')
+    lines.append(f'engine: {json.dumps("whisperx " + str(meta.get("model_size", "")))}')
     lines.append("---")
     lines.append("")
     lines.append(f"# Transcription — {os.path.basename(meta.get('source_file', ''))}")

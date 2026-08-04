@@ -89,12 +89,22 @@ public sealed class AppConfig
     public string WatchRoot { get; set; } = "";
     public string OutputRoot { get; set; } = "";
 
-    // Emplacements machine-wide (%PROGRAMDATA%) : la GUI (utilisateur) et le service
-    // (LocalSystem) doivent resoudre EXACTEMENT les memes chemins. %LOCALAPPDATA% ne
-    // convient pas car il pointe vers le profil systeme cote service.
+    // Emplacements machine-wide (%PROGRAMDATA%) : conserves pour la compatibilite avec les
+    // installations existantes. Le worker ne tourne plus en service LocalSystem (session 0)
+    // mais en tache planifiee dans la SESSION DE L'UTILISATEUR ; %PROGRAMDATA% reste toutefois
+    // partageable et sans risque pour ces caches/donnees.
     public string ModelCacheDir { get; set; } = @"%PROGRAMDATA%\LocalTranscriber\models";
     public string DataDir { get; set; } = @"%PROGRAMDATA%\LocalTranscriber\data";
     public string EngineExecutable { get; set; } = @"engine\transcriber-engine.exe";
+
+    /// <summary>
+    /// Environnement Python du moteur (venv cree par uv au 1er lancement). Par defaut sous
+    /// %LOCALAPPDATA% (profil utilisateur) : la GUI comme le worker tournent desormais sous
+    /// le compte de l'utilisateur, donc un emplacement par-utilisateur evite le piege de
+    /// propriete SYSTEM (dossier cree jadis par le service LocalSystem => acces refuse a la
+    /// reinstallation). Voir <see cref="Engine.EngineSetup"/>.
+    /// </summary>
+    public string EngineEnvDir { get; set; } = @"%LOCALAPPDATA%\LocalTranscriberData\engine-env";
 
     /// <summary>Installer automatiquement les mises à jour (téléchargées au lancement, appliquées à la fermeture).</summary>
     public bool AutoInstallUpdates { get; set; } = true;
@@ -111,6 +121,16 @@ public sealed class AppConfig
 
     public int StabilizationSeconds { get; set; } = 5;
     public int MaxParallelJobs { get; set; } = 1;
+
+    /// <summary>
+    /// Retente automatiquement les fichiers en echec au prochain scan, tant que leur nombre de
+    /// tentatives reste sous <see cref="MaxAutoRetries"/>. Desactive par defaut : sinon les echecs
+    /// restent en Failed (retraitement manuel via le bouton Retraiter).
+    /// </summary>
+    public bool AutoRetryFailedJobs { get; set; } = false;
+
+    /// <summary>Plafond de tentatives automatiques (tentative initiale incluse) avant abandon definitif.</summary>
+    public int MaxAutoRetries { get; set; } = 3;
 
     // ---- Serveur MCP (HTTP local) et recherche semantique ----
     public int McpPort { get; set; } = 8765;

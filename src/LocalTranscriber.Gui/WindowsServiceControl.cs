@@ -6,6 +6,15 @@ using System.Text;
 
 namespace LocalTranscriber.Gui;
 
+/// <summary>Etat du worker de fond, decouple de tout libelle localise affiche a l'UI.</summary>
+public enum WorkerState
+{
+    Running,
+    Stopped,
+    NotInstalled,
+    Error,
+}
+
 /// <summary>
 /// Pilote le worker en tache de fond via le Planificateur de taches Windows, dans la
 /// SESSION DE L'UTILISATEUR (declencheur « a l'ouverture de session »). On evite ainsi le
@@ -63,19 +72,33 @@ public static class WindowsServiceControl
         Run("schtasks.exe", $"/Delete /TN \"{TaskName}\" /F");
     }
 
-    public static string QueryStatus()
+    /// <summary>Etat du worker sous forme d'enum (logique metier, sans libelle localise).</summary>
+    public static WorkerState QueryState()
     {
         try
         {
             if (Process.GetProcessesByName(ProcessName).Length > 0)
-                return "En cours d'execution";
-            return TaskExists() ? "Arrete" : "Non installe";
+                return WorkerState.Running;
+            return TaskExists() ? WorkerState.Stopped : WorkerState.NotInstalled;
         }
-        catch (Exception ex)
+        catch
         {
-            return "Erreur : " + ex.Message;
+            return WorkerState.Error;
         }
     }
+
+    /// <summary>Libelle localise correspondant a un etat (pour affichage UI uniquement).</summary>
+    public static string Describe(WorkerState state) =>
+        state switch
+        {
+            WorkerState.Running => "En cours d'execution",
+            WorkerState.Stopped => "Arrete",
+            WorkerState.NotInstalled => "Non installe",
+            _ => "Erreur",
+        };
+
+    /// <summary>Libelle localise de l'etat courant (conserve pour compatibilite d'appel).</summary>
+    public static string QueryStatus() => Describe(QueryState());
 
     private static bool TaskExists() => Run("schtasks.exe", $"/Query /TN \"{TaskName}\"") == 0;
 
@@ -91,8 +114,11 @@ public static class WindowsServiceControl
             RedirectStandardError = true,
         };
         using var p = Process.Start(psi)!;
+        // Lecture non bloquante : on consomme stderr en async pendant qu'on lit stdout,
+        // pour eviter tout interblocage si l'un des tampons de sortie se remplit.
+        var errTask = p.StandardError.ReadToEndAsync();
         p.StandardOutput.ReadToEnd();
-        p.StandardError.ReadToEnd();
+        errTask.GetAwaiter().GetResult();
         p.WaitForExit();
         return p.ExitCode;
     }

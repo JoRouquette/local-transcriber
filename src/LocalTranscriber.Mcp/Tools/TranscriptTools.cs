@@ -101,37 +101,58 @@ public sealed class TranscriptTools
         [Description("Nombre de tours par page (defaut 50).")] int limit = 50
     )
     {
-        var jsonPath = Path.ChangeExtension(path, ".json");
-        var resolved = _guard.Resolve(jsonPath);
-        if (resolved is null || !File.Exists(resolved))
+        // Entree non fiable : on borne tout (chemin null, chemin malforme, lecture KO) pour
+        // renvoyer une erreur JSON propre plutot que laisser une stack trace remonter au client.
+        if (path is null)
+            return Json(new { error = "Chemin manquant." });
+
+        try
+        {
+            var jsonPath = Path.ChangeExtension(path, ".json");
+            var resolved = _guard.Resolve(jsonPath);
+            if (resolved is null || !File.Exists(resolved))
+                return Json(
+                    new { error = "Transcription introuvable ou hors du dossier de sortie.", path }
+                );
+
+            var turns = ToTurns(TranscriptReader.ReadSegments(resolved));
+            if (!string.IsNullOrWhiteSpace(speaker))
+                turns = turns
+                    .Where(t =>
+                        string.Equals(t.Speaker, speaker, StringComparison.OrdinalIgnoreCase)
+                    )
+                    .ToList();
+
+            var page = turns.Skip(Math.Max(0, offset)).Take(Math.Max(1, limit)).ToList();
+            int? next = offset + page.Count < turns.Count ? offset + page.Count : null;
+
             return Json(
-                new { error = "Transcription introuvable ou hors du dossier de sortie.", path }
-            );
-
-        var turns = ToTurns(TranscriptReader.ReadSegments(resolved));
-        if (!string.IsNullOrWhiteSpace(speaker))
-            turns = turns
-                .Where(t => string.Equals(t.Speaker, speaker, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        var page = turns.Skip(Math.Max(0, offset)).Take(Math.Max(1, limit)).ToList();
-        int? next = offset + page.Count < turns.Count ? offset + page.Count : null;
-
-        return Json(
-            new
-            {
-                path = resolved,
-                total_turns = turns.Count,
-                offset,
-                next_offset = next,
-                turns = page.Select(t => new
+                new
                 {
-                    t.Speaker,
-                    start = Math.Round(t.Start, 2),
-                    t.Text,
-                }),
-            }
-        );
+                    path = resolved,
+                    total_turns = turns.Count,
+                    offset,
+                    next_offset = next,
+                    turns = page.Select(t => new
+                    {
+                        t.Speaker,
+                        start = Math.Round(t.Start, 2),
+                        t.Text,
+                    }),
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            return Json(
+                new
+                {
+                    error = "Lecture de la transcription impossible.",
+                    detail = ex.Message,
+                    path,
+                }
+            );
+        }
     }
 
     private sealed record Turn(string Speaker, double Start, string Text);

@@ -18,7 +18,7 @@
 
     <TextBlock Grid.Row="0" Text="Traitements et fichiers" FontSize="20" FontWeight="Medium" />
 
-    <!-- Moteur Python (installeur léger : installé au premier lancement) -->
+    <!-- Moteur Python : état (3 états), mise à jour / réinstallation propre, journal -->
     <materialDesign:Card
       Grid.Row="1"
       Padding="16,12"
@@ -27,47 +27,115 @@
     >
       <StackPanel>
         <DockPanel>
-          <TextBlock VerticalAlignment="Center">
-            <TextBlock.Style>
-              <Style TargetType="TextBlock">
-                <Setter Property="Text" Value="Moteur Python : non installé" />
-                <Setter Property="Foreground" Value="#E53935" />
-                <Style.Triggers>
-                  <DataTrigger Binding="{Binding EngineReady}" Value="True">
-                    <Setter Property="Text" Value="Moteur Python : installé" />
-                    <Setter Property="Foreground" Value="#4CAF50" />
-                  </DataTrigger>
-                </Style.Triggers>
-              </Style>
-            </TextBlock.Style>
-          </TextBlock>
-          <Button
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <materialDesign:PackIcon
+              Width="18"
+              Height="18"
+              VerticalAlignment="Center"
+              Margin="0,0,8,0"
+            >
+              <materialDesign:PackIcon.Style>
+                <Style TargetType="materialDesign:PackIcon">
+                  <!-- Non installé -->
+                  <Setter Property="Kind" Value="AlertCircle" />
+                  <Setter Property="Foreground" Value="#E53935" />
+                  <Style.Triggers>
+                    <!-- Installé mais obsolète -->
+                    <DataTrigger Binding="{Binding EngineReady}" Value="True">
+                      <Setter Property="Kind" Value="Update" />
+                      <Setter Property="Foreground" Value="#FB8C00" />
+                    </DataTrigger>
+                    <!-- Installé et à jour -->
+                    <DataTrigger Binding="{Binding EngineUpToDate}" Value="True">
+                      <Setter Property="Kind" Value="CheckCircle" />
+                      <Setter Property="Foreground" Value="#4CAF50" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </materialDesign:PackIcon.Style>
+            </materialDesign:PackIcon>
+            <TextBlock
+              Text="{Binding EngineStatus}"
+              VerticalAlignment="Center"
+              FontWeight="Medium"
+            />
+          </StackPanel>
+          <StackPanel
             DockPanel.Dock="Right"
+            Orientation="Horizontal"
             HorizontalAlignment="Right"
-            Style="{StaticResource MaterialDesignOutlinedButton}"
-            Command="{Binding InstallEngineCommand}"
-            Content="Installer / réinstaller le moteur"
-          />
+          >
+            <Button
+              Style="{StaticResource MaterialDesignRaisedButton}"
+              Command="{Binding UpdateEngineCommand}"
+              IsEnabled="{Binding CanRunEngineSetup}"
+              Content="Mettre à jour"
+              ToolTip="Resynchronise les dépendances Python (rapide)."
+              Margin="0,0,8,0"
+            />
+            <Button
+              Style="{StaticResource MaterialDesignOutlinedButton}"
+              Command="{Binding ReinstallEngineCommand}"
+              IsEnabled="{Binding CanRunEngineSetup}"
+              Content="Réinstaller proprement"
+              ToolTip="Efface puis recrée l'environnement de zéro (plusieurs minutes)."
+            />
+          </StackPanel>
         </DockPanel>
+
         <ProgressBar
           Style="{StaticResource MaterialDesignLinearProgressBar}"
           IsIndeterminate="True"
           Margin="0,10,0,0"
           Visibility="{Binding IsInstallingEngine, Converter={StaticResource BoolToVis}}"
         />
-        <TextBox
-          Text="{Binding EngineSetupLog, Mode=OneWay}"
-          IsReadOnly="True"
-          FontFamily="Consolas"
-          FontSize="11"
-          VerticalScrollBarVisibility="Auto"
-          MaxHeight="140"
-          Margin="0,8,0,0"
-          Visibility="{Binding IsInstallingEngine, Converter={StaticResource BoolToVis}}"
-        />
+
+        <!-- Journal : reste visible tant qu'il n'est pas vide (donc après un échec) -->
+        <DockPanel
+          Margin="0,10,0,0"
+          Visibility="{Binding HasEngineLog, Converter={StaticResource BoolToVis}}"
+        >
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+            <TextBlock
+              Text="Journal d'installation"
+              FontSize="12"
+              FontWeight="Medium"
+              VerticalAlignment="Center"
+            />
+            <Button
+              DockPanel.Dock="Right"
+              HorizontalAlignment="Right"
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding CopyEngineLogCommand}"
+              Padding="6,2"
+              MinHeight="0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon
+                  Kind="ContentCopy"
+                  Width="14"
+                  Height="14"
+                  VerticalAlignment="Center"
+                  Margin="0,0,4,0"
+                />
+                <TextBlock Text="Copier" VerticalAlignment="Center" FontSize="12" />
+              </StackPanel>
+            </Button>
+          </DockPanel>
+          <TextBox
+            Text="{Binding EngineSetupLog, Mode=OneWay}"
+            IsReadOnly="True"
+            FontFamily="Consolas"
+            FontSize="11"
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Auto"
+            MaxHeight="200"
+          />
+        </DockPanel>
       </StackPanel>
     </materialDesign:Card>
 
+    <!-- Worker : état + actions -->
     <materialDesign:Card
       Grid.Row="2"
       Padding="16,12"
@@ -75,7 +143,6 @@
       materialDesign:ElevationAssist.Elevation="Dp2"
     >
       <DockPanel>
-        <!-- Pastille d'état -->
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <materialDesign:PackIcon Kind="Circle" Width="16" Height="16" VerticalAlignment="Center">
             <materialDesign:PackIcon.Style>
@@ -97,7 +164,6 @@
           />
         </StackPanel>
 
-        <!-- Actions -->
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
           <Button
             Style="{StaticResource MaterialDesignOutlinedButton}"
@@ -132,22 +198,11 @@
           >
             <materialDesign:PackIcon Kind="Refresh" />
           </Button>
-          <Button
-            Style="{StaticResource MaterialDesignFlatButton}"
-            Command="{Binding ReprocessFileCommand}"
-            ToolTip="Retraiter le fichier sélectionné dans la liste ci-dessous"
-            Margin="8,0,0,0"
-          >
-            <StackPanel Orientation="Horizontal">
-              <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
-              <TextBlock Text="Retraiter" VerticalAlignment="Center" />
-            </StackPanel>
-          </Button>
         </StackPanel>
       </DockPanel>
     </materialDesign:Card>
 
-    <!-- Monitoring de la file -->
+    <!-- Monitoring de la file + santé des services -->
     <materialDesign:Card
       Grid.Row="3"
       Padding="16,12"
@@ -155,7 +210,44 @@
       materialDesign:ElevationAssist.Elevation="Dp2"
     >
       <StackPanel>
-        <TextBlock Text="Suivi de la file d'attente" FontWeight="Medium" Margin="0,0,0,10" />
+        <DockPanel Margin="0,0,0,10">
+          <TextBlock Text="Suivi de la file d'attente" FontWeight="Medium" VerticalAlignment="Center" />
+          <!-- Santé MCP + sidecar -->
+          <StackPanel
+            DockPanel.Dock="Right"
+            Orientation="Horizontal"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+          >
+            <materialDesign:PackIcon Kind="Circle" Width="12" Height="12" VerticalAlignment="Center">
+              <materialDesign:PackIcon.Style>
+                <Style TargetType="materialDesign:PackIcon">
+                  <Setter Property="Foreground" Value="#9E9E9E" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding McpHealthy}" Value="True">
+                      <Setter Property="Foreground" Value="#4CAF50" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </materialDesign:PackIcon.Style>
+            </materialDesign:PackIcon>
+            <TextBlock Text="MCP" VerticalAlignment="Center" Margin="4,0,16,0" FontSize="12" />
+            <materialDesign:PackIcon Kind="Circle" Width="12" Height="12" VerticalAlignment="Center">
+              <materialDesign:PackIcon.Style>
+                <Style TargetType="materialDesign:PackIcon">
+                  <Setter Property="Foreground" Value="#9E9E9E" />
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding SidecarHealthy}" Value="True">
+                      <Setter Property="Foreground" Value="#4CAF50" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </materialDesign:PackIcon.Style>
+            </materialDesign:PackIcon>
+            <TextBlock Text="Sidecar embeddings" VerticalAlignment="Center" Margin="4,0,0,0" FontSize="12" />
+          </StackPanel>
+        </DockPanel>
+
         <WrapPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,24,4">
             <materialDesign:PackIcon
@@ -175,11 +267,7 @@
               Foreground="#1E88E5"
             />
             <TextBlock Text="En cours : " VerticalAlignment="Center" />
-            <TextBlock
-              Text="{Binding ProcessingCount}"
-              FontWeight="Bold"
-              VerticalAlignment="Center"
-            />
+            <TextBlock Text="{Binding ProcessingCount}" FontWeight="Bold" VerticalAlignment="Center" />
           </StackPanel>
           <StackPanel Orientation="Horizontal" Margin="0,0,24,4">
             <materialDesign:PackIcon
@@ -202,13 +290,61 @@
             <TextBlock Text="{Binding FailedCount}" FontWeight="Bold" VerticalAlignment="Center" />
           </StackPanel>
         </WrapPanel>
-        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-          <TextBlock
-            Text="Fichier en cours : "
-            Foreground="{DynamicResource MaterialDesignBodyLight}"
-          />
-          <TextBlock Text="{Binding CurrentFile}" FontWeight="Medium" />
-        </StackPanel>
+
+        <DockPanel Margin="0,6,0,0">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock
+              Text="Fichier en cours : "
+              Foreground="{DynamicResource MaterialDesignBodyLight}"
+            />
+            <TextBlock Text="{Binding CurrentFile}" FontWeight="Medium" />
+            <TextBlock
+              Text="{Binding CurrentElapsed}"
+              Margin="10,0,0,0"
+              Foreground="{DynamicResource MaterialDesignBodyLight}"
+            />
+          </StackPanel>
+          <StackPanel
+            DockPanel.Dock="Right"
+            Orientation="Horizontal"
+            HorizontalAlignment="Right"
+          >
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding ReprocessFileCommand}"
+              ToolTip="Retraiter le fichier sélectionné dans la liste ci-dessous"
+              Margin="0,0,4,0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="Retraiter" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding OpenOutputFolderCommand}"
+              ToolTip="Ouvrir le dossier de sortie du fichier sélectionné (ou le dossier racine)"
+              Margin="0,0,4,0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon Kind="FolderOpen" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="Ouvrir le dossier" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding CancelCurrentCommand}"
+              ToolTip="Interrompre le traitement en cours"
+              Foreground="#E53935"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon Kind="StopCircleOutline" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="Annuler" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </StackPanel>
+        </DockPanel>
+
         <TextBlock
           Text="{Binding LastError}"
           Foreground="#E53935"
@@ -219,25 +355,60 @@
       </StackPanel>
     </materialDesign:Card>
 
-    <materialDesign:Card Grid.Row="4" materialDesign:ElevationAssist.Elevation="Dp2">
-      <DataGrid
-        ItemsSource="{Binding Jobs}"
-        SelectedItem="{Binding SelectedJob}"
-        Style="{StaticResource MaterialDesignDataGrid}"
-        AutoGenerateColumns="False"
-        IsReadOnly="True"
+    <!-- Journal live + liste des fichiers -->
+    <Grid Grid.Row="4">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <materialDesign:Card
+        Grid.Row="0"
+        Padding="12,10"
+        Margin="0,0,0,12"
+        materialDesign:ElevationAssist.Elevation="Dp2"
       >
-        <DataGrid.Columns>
-          <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />
-          <DataGridTextColumn Header="Fichier" Binding="{Binding AudioPath}" Width="3*" />
-          <DataGridTextColumn
-            Header="Mis à jour"
-            Binding="{Binding UpdatedAt, StringFormat=g}"
-            Width="Auto"
+        <StackPanel>
+          <TextBlock
+            Text="Journal du traitement (temps réel)"
+            FontWeight="Medium"
+            Margin="0,0,0,6"
           />
-          <DataGridTextColumn Header="Erreur" Binding="{Binding Error}" Width="2*" />
-        </DataGrid.Columns>
-      </DataGrid>
-    </materialDesign:Card>
+          <TextBox
+            Text="{Binding LiveLog, Mode=OneWay}"
+            TextChanged="LiveLog_TextChanged"
+            IsReadOnly="True"
+            FontFamily="Consolas"
+            FontSize="11"
+            VerticalScrollBarVisibility="Auto"
+            HorizontalScrollBarVisibility="Auto"
+            Height="150"
+            Background="{DynamicResource MaterialDesignTextFieldBoxBackground}"
+          />
+        </StackPanel>
+      </materialDesign:Card>
+
+      <materialDesign:Card Grid.Row="1" materialDesign:ElevationAssist.Elevation="Dp2">
+        <DataGrid
+          ItemsSource="{Binding Jobs}"
+          SelectedItem="{Binding SelectedJob}"
+          Style="{StaticResource MaterialDesignDataGrid}"
+          AutoGenerateColumns="False"
+          IsReadOnly="True"
+        >
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="Statut" Binding="{Binding Status}" Width="Auto" />
+            <DataGridTextColumn Header="Fichier" Binding="{Binding AudioPath}" Width="3*" />
+            <DataGridTextColumn Header="Durée" Binding="{Binding DurationText}" Width="Auto" />
+            <DataGridTextColumn
+              Header="Mis à jour"
+              Binding="{Binding UpdatedAt, StringFormat=g}"
+              Width="Auto"
+            />
+            <DataGridTextColumn Header="Erreur" Binding="{Binding Error}" Width="2*" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </materialDesign:Card>
+    </Grid>
   </Grid>
 </UserControl>

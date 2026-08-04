@@ -34,10 +34,22 @@ public sealed class TranscriptResources
         [Description("Nom de base du fichier, sans extension.")] string name
     )
     {
-        var md = Path.Combine(_output.OutputRoot, project, name + ".md");
-        var resolved = _guard.Resolve(md);
-        if (resolved is null || !File.Exists(resolved))
-            return $"Transcription introuvable : transcript://{project}/{name}";
-        return File.ReadAllText(resolved);
+        // Entree non fiable : on borne resolution de chemin et lecture pour renvoyer un
+        // message propre plutot que laisser une exception remonter via le framework MCP.
+        if (project is null || name is null)
+            return "Transcription introuvable : projet ou nom manquant.";
+
+        try
+        {
+            var md = Path.Combine(_output.OutputRoot, project, name + ".md");
+            var resolved = _guard.Resolve(md);
+            if (resolved is null || !File.Exists(resolved))
+                return $"Transcription introuvable : transcript://{project}/{name}";
+            return File.ReadAllText(resolved);
+        }
+        catch (Exception ex)
+        {
+            return $"Lecture impossible de transcript://{project}/{name} : {ex.Message}";
+        }
     }
 }

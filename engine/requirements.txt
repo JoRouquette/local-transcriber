@@ -12,9 +12,13 @@
 #   - speechbrain 1.1.0 (via pyannote 3.3) : ses lazy modules (k2_fsa, nlp) cassent
 #     inspect.stack() ; neutralise au runtime par transcriber_engine._compat.
 #
-# PyTorch s'installe en amont selon la cible (voir README / build-engine.ps1) :
-#   CPU      :  pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-#   GPU CUDA :  pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+# PyTorch DOIT etre pre-installe EN AMONT de ce requirements.txt (ordre obligatoire) :
+# torch/torchaudio ne sont volontairement pas listes ici car ils viennent d'un index
+# dedie (CPU ou CUDA), pas de PyPI. Les versions exactes sont epinglees dans
+# `constraints-torch-cpu.txt` (torch==2.2.2, torchaudio==2.2.2) -> installer d'abord :
+#   CPU      :  pip install -r constraints-torch-cpu.txt --index-url https://download.pytorch.org/whl/cpu
+#   GPU CUDA :  pip install -r constraints-torch-cpu.txt --index-url https://download.pytorch.org/whl/cu121
+# puis seulement : pip install -r requirements.txt
 
 whisperx==3.3.1
 pyannote.audio==3.3.2

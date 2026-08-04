@@ -41,5 +41,53 @@ builder
 builder.WebHost.UseUrls($"http://127.0.0.1:{config.McpPort}");
 
 var app = builder.Build();
+
+// M1 — Protection anti-DNS-rebinding du transport MCP HTTP. Kestrel n'ecoute que sur la
+// boucle locale (127.0.0.1), mais une page web malveillante ouverte dans un navigateur
+// pourrait tenter d'atteindre le serveur via un nom DNS qui resout vers 127.0.0.1
+// (rebinding). On rejette donc (403) toute requete dont l'en-tete Host ou Origin ne pointe
+// pas vers un hote loopback autorise. L'en-tete Origin absent est tolere : les clients MCP
+// non navigateur (Claude Desktop) n'en envoient pas ; seul un navigateur en poserait un,
+// cas ou la verification prend tout son sens. On ne casse ainsi aucun client MCP local.
+static bool IsLoopbackHost(string? host)
+{
+    if (string.IsNullOrEmpty(host))
+        return false;
+    // Retire les crochets IPv6 eventuels ([::1] -> ::1).
+    host = host.Trim('[', ']');
+    return host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase)
+        || host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || host.Equals("::1", StringComparison.OrdinalIgnoreCase);
+}
+
+app.Use(
+    async (context, next) =>
+    {
+        // Host : l'hote (sans le port) doit figurer dans l'allow-list loopback.
+        if (!IsLoopbackHost(context.Request.Host.Host))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return;
+        }
+
+        // Origin : s'il est present (client navigateur), son hote doit etre loopback ;
+        // absent, on laisse passer (clients MCP non navigateur legitimes).
+        var origin = context.Request.Headers["Origin"].ToString();
+        if (!string.IsNullOrEmpty(origin))
+        {
+            if (
+                !Uri.TryCreate(origin, UriKind.Absolute, out var originUri)
+                || !IsLoopbackHost(originUri.Host)
+            )
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+        }
+
+        await next();
+    }
+);
+
 app.MapMcp("/mcp");
 app.Run();

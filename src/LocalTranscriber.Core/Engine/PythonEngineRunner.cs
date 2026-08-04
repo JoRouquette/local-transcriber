@@ -25,7 +25,12 @@ public sealed class PythonEngineRunner
         _logger = logger ?? NullLogger.Instance;
     }
 
-    public async Task<EngineResult> RunAsync(EngineRequest request, CancellationToken ct = default)
+    /// <param name="onLog">Reçoit les lignes de log (stderr) du moteur, en temps réel.</param>
+    public async Task<EngineResult> RunAsync(
+        EngineRequest request,
+        Action<string>? onLog = null,
+        CancellationToken ct = default
+    )
     {
         if (!File.Exists(_enginePath))
             return new EngineResult
@@ -58,26 +63,51 @@ public sealed class PythonEngineRunner
             psi.Environment["HF_TOKEN"] = _hfToken;
 
         var stdout = new StringBuilder();
+        var bufferLock = new object();
+        // Les handlers de flux tournent sur des threads du pool : on ne considere la lecture
+        // terminee que lorsque la ligne sentinelle (e.Data == null) est recue pour chaque flux.
+        var stdoutDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var stderrDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        Process? proc = null;
         try
         {
-            using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             proc.OutputDataReceived += (_, e) =>
             {
-                if (e.Data != null)
+                if (e.Data == null)
+                {
+                    stdoutDone.TrySetResult(true);
+                    return;
+                }
+                lock (bufferLock)
                     stdout.AppendLine(e.Data);
             };
             proc.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data != null)
-                    _logger.LogDebug("[engine] {Line}", e.Data);
+                if (e.Data == null)
+                {
+                    stderrDone.TrySetResult(true);
+                    return;
+                }
+                _logger.LogDebug("[engine] {Line}", e.Data);
+                onLog?.Invoke(e.Data);
             };
 
             proc.Start();
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             await proc.WaitForExitAsync(ct);
+            // On attend le drainage complet des deux flux avant de lire les buffers : les handlers
+            // peuvent encore avoir des lignes en attente au moment ou le process se termine.
+            await Task.WhenAll(stdoutDone.Task, stderrDone.Task);
 
-            var raw = stdout.ToString().Trim();
+            string raw;
+            lock (bufferLock)
+                raw = stdout.ToString().Trim();
             if (string.IsNullOrEmpty(raw))
                 return new EngineResult
                 {
@@ -95,6 +125,18 @@ public sealed class PythonEngineRunner
                     Error = "Resultat moteur illisible.",
                 };
         }
+        catch (OperationCanceledException)
+        {
+            // Annulation (arret du worker ou annulation du job) : on tue le process moteur
+            // et son arbre pour ne pas laisser de Python orphelin, puis on signale l'annulation.
+            KillTree(proc);
+            return new EngineResult
+            {
+                Status = "cancelled",
+                AudioPath = request.AudioPath,
+                Error = "Traitement annule.",
+            };
+        }
         catch (Exception ex)
         {
             return new EngineResult
@@ -106,6 +148,7 @@ public sealed class PythonEngineRunner
         }
         finally
         {
+            proc?.Dispose();
             try
             {
                 File.Delete(reqPath);
@@ -113,6 +156,21 @@ public sealed class PythonEngineRunner
             catch
             { /* best effort */
             }
+        }
+    }
+
+    private static void KillTree(Process? proc)
+    {
+        try
+        {
+            if (proc is { HasExited: false })
+            {
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(3000);
+            }
+        }
+        catch
+        { /* best effort */
         }
     }
 }

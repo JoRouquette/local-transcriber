@@ -136,7 +136,9 @@ OutputRoot\                 <- miroir de l'arborescence
 
 ## Brancher Claude Desktop (MCP)
 
-Le service expose le MCP en **HTTP local** sur `http://127.0.0.1:<mcpPort>/mcp` (défaut `8765`, `127.0.0.1` uniquement). Deux façons de le brancher dans `%APPDATA%\Claude\claude_desktop_config.json` (voir `docs\claude_desktop_config.example.json`) :
+> **Guide pas à pas :** [`docs/mcp-claude-desktop.md`](docs/mcp-claude-desktop.md) (prérequis, emplacement du fichier, vérification, dépannage). Résumé ci-dessous.
+
+Le service expose le MCP en **HTTP local** sur `http://127.0.0.1:<mcpPort>/mcp` (défaut `8765`, `127.0.0.1` uniquement). Le MCP n'est disponible que **lorsque le worker tourne** (pastille MCP verte dans l'onglet « Traitements et fichiers »). Deux façons de le brancher dans `%APPDATA%\Claude\claude_desktop_config.json` (voir `docs\claude_desktop_config.example.json`) :
 
 Pont `mcp-remote` (compatible partout, nécessite Node/`npx`) :
 

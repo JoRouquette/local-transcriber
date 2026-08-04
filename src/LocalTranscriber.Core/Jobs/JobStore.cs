@@ -10,7 +10,8 @@ public sealed record JobSummary(
     int Failed,
     string? CurrentFile,
     string? LastError,
-    string? LastErrorFile
+    string? LastErrorFile,
+    DateTime? CurrentStartedAt
 );
 
 /// <summary>
@@ -64,19 +65,43 @@ public sealed class JobStore
             CREATE INDEX IF NOT EXISTS ix_jobs_status ON jobs(status);
             """;
         cmd.ExecuteNonQuery();
+
+        // Migrations additives (bases creees par des versions anterieures) : SQLite n'a pas de
+        // "ADD COLUMN IF NOT EXISTS", on ignore l'erreur "duplicate column".
+        AddColumnIfMissing(c, "started_at", "TEXT");
+        AddColumnIfMissing(c, "finished_at", "TEXT");
+    }
+
+    private static void AddColumnIfMissing(SqliteConnection c, string column, string type)
+    {
+        try
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = $"ALTER TABLE jobs ADD COLUMN {column} {type}";
+            cmd.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        { /* colonne deja presente */
+        }
     }
 
     public bool AlreadyKnown(string fileHash)
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
+        // Failed est inclus : un fichier deja tente et echoue ne doit pas etre re-enfile en boucle
+        // par le scan. Le retraitement manuel (bouton Retraiter) passe par un autre chemin.
         cmd.CommandText =
-            "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done')";
+            "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done','Failed')";
         cmd.Parameters.AddWithValue("$h", fileHash);
         return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 
-    /// <summary>Ajoute un job s'il n'existe pas deja. Retourne l'id, ou null si ignore.</summary>
+    /// <summary>
+    /// Ajoute un job s'il n'existe pas deja (INSERT OR IGNORE sur le hash) et retourne son id.
+    /// Le SELECT final renvoie toujours l'id, qu'il s'agisse d'une insertion ou d'un doublon
+    /// ignore : la valeur n'est donc jamais null en pratique.
+    /// </summary>
     public long? Enqueue(string audioPath, string fileHash, string outputDir, string baseName)
     {
         using var c = Open();
@@ -100,7 +125,9 @@ public sealed class JobStore
     public TranscriptionJob? DequeueNext()
     {
         using var c = Open();
-        using var tx = c.BeginTransaction();
+        // IMMEDIATE : SELECT + UPDATE se font sous un verrou d'ecriture pris d'emblee, sans
+        // promotion read->write — deux workers ne peuvent pas prendre le meme job en concurrence.
+        using var tx = c.BeginTransaction(deferred: false);
         using var sel = c.CreateCommand();
         sel.Transaction = tx;
         sel.CommandText =
@@ -124,20 +151,45 @@ public sealed class JobStore
             };
         }
 
+        var now = DateTime.UtcNow.ToString("o");
         using var upd = c.CreateCommand();
         upd.Transaction = tx;
         upd.CommandText =
-            "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now WHERE id=$id";
-        upd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+            "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now, started_at=$now, finished_at=NULL WHERE id=$id";
+        upd.Parameters.AddWithValue("$now", now);
         upd.Parameters.AddWithValue("$id", id);
         upd.ExecuteNonQuery();
         tx.Commit();
+        job.StartedAt = DateTime.Parse(
+            now,
+            null,
+            System.Globalization.DateTimeStyles.RoundtripKind
+        );
         return job;
     }
 
     public void MarkDone(long id) => SetStatus(id, JobStatus.Done, null);
 
     public void MarkFailed(long id, string error) => SetStatus(id, JobStatus.Failed, error);
+
+    /// <summary>
+    /// Retry auto configurable : repasse en Pending les jobs Failed dont le nombre de tentatives
+    /// reste strictement sous <paramref name="maxAttempts"/> (attempts est incremente a chaque
+    /// DequeueNext, donc maxAttempts = nombre total de tentatives autorisees). Retourne le nombre
+    /// de jobs re-enfiles. Un maxAttempts &lt;= 0 ne retente rien.
+    /// </summary>
+    public int RequeueFailedForRetry(int maxAttempts)
+    {
+        if (maxAttempts <= 0)
+            return 0;
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Failed' AND attempts < $max";
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+        cmd.Parameters.AddWithValue("$max", maxAttempts);
+        return cmd.ExecuteNonQuery();
+    }
 
     /// <summary>Repasse en Pending les jobs restes Processing (ex. apres un crash du service).</summary>
     public int RequeueStale()
@@ -154,7 +206,8 @@ public sealed class JobStore
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "UPDATE jobs SET status=$s, error=$e, updated_at=$now WHERE id=$id";
+        cmd.CommandText =
+            "UPDATE jobs SET status=$s, error=$e, updated_at=$now, finished_at=$now WHERE id=$id";
         cmd.Parameters.AddWithValue("$s", status.ToString());
         cmd.Parameters.AddWithValue("$e", (object?)error ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
@@ -197,12 +250,23 @@ public sealed class JobStore
             while (r.Read())
                 counts[r.GetString(0)] = r.GetInt32(1);
         }
-        string? current;
+        string? current = null;
+        DateTime? currentStarted = null;
         using (var cmd = c.CreateCommand())
         {
             cmd.CommandText =
-                "SELECT audio_path FROM jobs WHERE status='Processing' ORDER BY updated_at DESC LIMIT 1";
-            current = cmd.ExecuteScalar() as string;
+                "SELECT audio_path, started_at FROM jobs WHERE status='Processing' ORDER BY updated_at DESC LIMIT 1";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                current = r.GetString(0);
+                if (!r.IsDBNull(1))
+                    currentStarted = DateTime.Parse(
+                        r.GetString(1),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    );
+            }
         }
         string? lastErr = null,
             lastErrFile = null;
@@ -225,7 +289,8 @@ public sealed class JobStore
             Get("Failed"),
             current,
             lastErr,
-            lastErrFile
+            lastErrFile,
+            currentStarted
         );
     }
 
@@ -234,10 +299,18 @@ public sealed class JobStore
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText =
-            "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts FROM jobs ORDER BY id DESC LIMIT $l";
+            "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts, started_at, finished_at FROM jobs ORDER BY id DESC LIMIT $l";
         cmd.Parameters.AddWithValue("$l", limit);
         var list = new List<TranscriptionJob>();
         using var r = cmd.ExecuteReader();
+        DateTime? ParseUtc(int i) =>
+            r.IsDBNull(i)
+                ? null
+                : DateTime.Parse(
+                    r.GetString(i),
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind
+                );
         while (r.Read())
         {
             list.Add(
@@ -249,10 +322,20 @@ public sealed class JobStore
                     OutputDir = r.GetString(3),
                     BaseName = r.GetString(4),
                     Status = Enum.Parse<JobStatus>(r.GetString(5)),
-                    CreatedAt = DateTime.Parse(r.GetString(6)),
-                    UpdatedAt = DateTime.Parse(r.GetString(7)),
+                    CreatedAt = DateTime.Parse(
+                        r.GetString(6),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    ),
+                    UpdatedAt = DateTime.Parse(
+                        r.GetString(7),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    ),
                     Error = r.IsDBNull(8) ? null : r.GetString(8),
                     Attempts = r.GetInt32(9),
+                    StartedAt = ParseUtc(10),
+                    FinishedAt = ParseUtc(11),
                 }
             );
         }

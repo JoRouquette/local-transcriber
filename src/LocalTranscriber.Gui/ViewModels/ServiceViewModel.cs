@@ -1,6 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,22 +19,37 @@ using MaterialDesignThemes.Wpf;
 
 namespace LocalTranscriber.Gui.ViewModels;
 
-/// <summary>Page Service &amp; File : état du service et file d'attente, rafraîchis automatiquement.</summary>
+/// <summary>Page Traitements et fichiers : état du moteur, du worker, de la file et logs live.</summary>
 public sealed partial class ServiceViewModel : ObservableObject
 {
     private readonly SettingsService _settings;
     private readonly ISnackbarMessageQueue _snackbar;
     private readonly DispatcherTimer _timer;
+    private EngineSetup _engine;
+
+    // Garde de re-entrance : un tick est ignore si un rafraichissement est deja en cours.
+    private bool _refreshing;
 
     public ServiceViewModel(SettingsService settings, ISnackbarMessageQueue snackbar)
     {
         _settings = settings;
         _snackbar = snackbar;
+        _engine = EngineSetup.FromConfig(settings.Config);
         Jobs = new ObservableCollection<TranscriptionJob>();
+
+        // La config peut etre rechargee : on reconstruit le moteur sur la config a jour.
+        _settings.Reloaded += OnSettingsReloaded;
 
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _timer.Tick += async (_, _) => await RefreshAsync();
         _timer.Start();
+        _ = RefreshAsync();
+    }
+
+    /// <summary>Recharge : le moteur pointait sur une config perimee, on le recree.</summary>
+    private void OnSettingsReloaded()
+    {
+        _engine = EngineSetup.FromConfig(_settings.Config);
         _ = RefreshAsync();
     }
 
@@ -43,16 +65,28 @@ public sealed partial class ServiceViewModel : ObservableObject
     private TranscriptionJob? _selectedJob;
 
     // ---- Environnement moteur (installeur leger) ----
-    private readonly EngineSetup _engine = new();
-
     [ObservableProperty]
     private bool _engineReady;
 
     [ObservableProperty]
-    private bool _isInstallingEngine;
+    private bool _engineUpToDate;
 
     [ObservableProperty]
+    private string _engineStatus = "Vérification du moteur…";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanRunEngineSetup))]
+    private bool _isInstallingEngine;
+
+    /// <summary>Faux pendant une installation (désactive les boutons moteur).</summary>
+    public bool CanRunEngineSetup => !IsInstallingEngine;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasEngineLog))]
     private string _engineSetupLog = "";
+
+    /// <summary>Le journal reste affiché tant qu'il n'est pas vide (y compris après un échec).</summary>
+    public bool HasEngineLog => !string.IsNullOrWhiteSpace(EngineSetupLog);
 
     // ---- Monitoring de la file ----
     [ObservableProperty]
@@ -71,36 +105,95 @@ public sealed partial class ServiceViewModel : ObservableObject
     private string _currentFile = "—";
 
     [ObservableProperty]
+    private string _currentElapsed = "";
+
+    [ObservableProperty]
     private string _lastError = "";
 
+    // ---- Logs live + santé des services ----
+    [ObservableProperty]
+    private string _liveLog = "";
+
+    [ObservableProperty]
+    private bool _mcpHealthy;
+
+    [ObservableProperty]
+    private bool _sidecarHealthy;
+
+    // ================= Moteur : mise à jour / réinstallation =================
+
     [RelayCommand]
-    private async Task InstallEngine()
+    private Task UpdateEngine() =>
+        RunEngineSetupAsync(recreate: false, "Mise à jour du moteur Python…");
+
+    [RelayCommand]
+    private Task ReinstallEngine() =>
+        RunEngineSetupAsync(recreate: true, "Réinstallation propre du moteur Python…");
+
+    private async Task RunEngineSetupAsync(bool recreate, string startMessage)
     {
         if (IsInstallingEngine)
             return;
         IsInstallingEngine = true;
         EngineSetupLog = "";
+
         var progress = new Progress<string>(line =>
         {
             var text = EngineSetupLog + line + "\n";
-            EngineSetupLog = text.Length > 16000 ? text[^16000..] : text;
+            // Journal borné : on garde les derniers ~200 Ko.
+            EngineSetupLog = text.Length > 200_000 ? text[^200_000..] : text;
         });
+        void Log(string m) => ((IProgress<string>)progress).Report(m);
+
+        var wasRunning = IsRunning;
         try
         {
-            _snackbar.Enqueue(
-                "Installation du moteur Python… (plusieurs minutes au premier lancement)"
-            );
-            var ok = await _engine.SetupAsync(progress, cuda: false);
-            EngineReady = _engine.IsReady;
-            _snackbar.Enqueue(
-                ok ? "Moteur installé." : "Échec de l'installation (voir le journal ci-dessous)."
-            );
+            _snackbar.Enqueue(startMessage);
+            // Le worker garde le sidecar Python ouvert : il verrouille l'environnement.
+            // On l'arrête pour que uv puisse (re)créer le venv sans « accès refusé ».
+            Log("Arrêt du worker pour libérer l'environnement…");
+            await Task.Run(WindowsServiceControl.Stop);
+            await Task.Delay(1500);
+
+            var ok = await _engine.InstallAsync(recreate, progress, cuda: false);
+            UpdateEngineStatus();
+            _snackbar.Enqueue(ok ? "Moteur prêt." : "Échec (voir le journal ci-dessous).");
+        }
+        catch (Exception ex)
+        {
+            Log("Erreur : " + ex.Message);
+            _snackbar.Enqueue("Erreur : " + ex.Message);
         }
         finally
         {
             IsInstallingEngine = false;
+            if (wasRunning)
+            {
+                try
+                {
+                    await Task.Run(WindowsServiceControl.Start);
+                }
+                catch
+                { /* le worker sera relançable manuellement */
+                }
+            }
         }
     }
+
+    [RelayCommand]
+    private void CopyEngineLog()
+    {
+        try
+        {
+            Clipboard.SetText(EngineSetupLog ?? "");
+            _snackbar.Enqueue("Journal copié dans le presse-papiers.");
+        }
+        catch
+        { /* le presse-papiers peut être indisponible ponctuellement */
+        }
+    }
+
+    // ================= File : actions =================
 
     [RelayCommand]
     private void ReprocessFile()
@@ -112,25 +205,64 @@ public sealed partial class ServiceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task InstallService()
+    private void OpenOutputFolder()
     {
+        var dir = SelectedJob?.OutputDir;
+        if (string.IsNullOrWhiteSpace(dir))
+            dir = ConfigStore.ExpandPath(_settings.Config.OutputRoot);
+        try
+        {
+            if (Directory.Exists(dir))
+                Process.Start(
+                    new ProcessStartInfo("explorer.exe", $"\"{dir}\"") { UseShellExecute = true }
+                );
+            else
+                _snackbar.Enqueue("Dossier de sortie introuvable : " + dir);
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Enqueue("Impossible d'ouvrir le dossier : " + ex.Message);
+        }
+    }
+
+    [RelayCommand]
+    private void CancelCurrent()
+    {
+        if (ProcessingCount == 0)
+        {
+            _snackbar.Enqueue("Aucun traitement en cours.");
+            return;
+        }
+        try
+        {
+            var dataDir = ConfigStore.ExpandPath(_settings.Config.DataDir);
+            var flag = ControlSignals.CancelCurrentFlag(dataDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(flag)!);
+            File.WriteAllText(flag, DateTime.UtcNow.ToString("o"));
+            _snackbar.Enqueue("Annulation demandée — le traitement en cours va s'arrêter.");
+        }
+        catch (Exception ex)
+        {
+            _snackbar.Enqueue("Erreur : " + ex.Message);
+        }
+    }
+
+    // ================= Worker : cycle de vie =================
+
+    [RelayCommand]
+    private async Task InstallService() =>
         await RunAsync(
             WindowsServiceControl.Install,
             "Activation du worker en arrière-plan (session utilisateur)…"
         );
-    }
 
     [RelayCommand]
-    private async Task StartService()
-    {
-        await RunAsync(WindowsServiceControl.Start, "Démarrage du service…");
-    }
+    private async Task StartService() =>
+        await RunAsync(WindowsServiceControl.Start, "Démarrage du worker…");
 
     [RelayCommand]
-    private async Task StopService()
-    {
-        await RunAsync(WindowsServiceControl.Stop, "Arrêt du service…");
-    }
+    private async Task StopService() =>
+        await RunAsync(WindowsServiceControl.Stop, "Arrêt du worker…");
 
     [RelayCommand]
     private async Task Refresh() => await RefreshAsync();
@@ -150,31 +282,142 @@ public sealed partial class ServiceViewModel : ObservableObject
         }
     }
 
+    // ================= Rafraîchissement =================
+
     public async Task RefreshAsync()
     {
-        var status = await Task.Run(WindowsServiceControl.QueryStatus);
-        ServiceStatus = status;
-        IsRunning = status.Contains("cours", StringComparison.OrdinalIgnoreCase);
-        EngineReady = _engine.IsReady;
-
-        var jobs = await Task.Run(LoadJobs);
-        Jobs.Clear();
-        foreach (var j in jobs)
-            Jobs.Add(j);
-
-        var summary = await Task.Run(LoadSummary);
-        if (summary is not null)
+        // Un rafraichissement deja en cours : on saute ce tick pour eviter le chevauchement.
+        if (_refreshing)
+            return;
+        _refreshing = true;
+        try
         {
-            PendingCount = summary.Pending;
-            ProcessingCount = summary.Processing;
-            DoneCount = summary.Done;
-            FailedCount = summary.Failed;
-            CurrentFile = string.IsNullOrEmpty(summary.CurrentFile)
-                ? "—"
-                : Path.GetFileName(summary.CurrentFile);
-            LastError = string.IsNullOrEmpty(summary.LastError)
-                ? ""
-                : $"{Path.GetFileName(summary.LastErrorFile)} — {summary.LastError}";
+            var state = await Task.Run(WindowsServiceControl.QueryState);
+            ServiceStatus = WindowsServiceControl.Describe(state);
+            // L'etat est derive de l'enum, plus d'une comparaison sur un libelle localise.
+            IsRunning = state == WorkerState.Running;
+
+            UpdateEngineStatus();
+
+            var jobs = await Task.Run(LoadJobs);
+            Jobs.Clear();
+            foreach (var j in jobs)
+                Jobs.Add(j);
+
+            var summary = await Task.Run(LoadSummary);
+            if (summary is not null)
+            {
+                PendingCount = summary.Pending;
+                ProcessingCount = summary.Processing;
+                DoneCount = summary.Done;
+                FailedCount = summary.Failed;
+                CurrentFile = string.IsNullOrEmpty(summary.CurrentFile)
+                    ? "—"
+                    : Path.GetFileName(summary.CurrentFile);
+                CurrentElapsed = summary.CurrentStartedAt is { } started
+                    ? FormatDuration(DateTime.UtcNow - started)
+                    : "";
+                LastError = string.IsNullOrEmpty(summary.LastError)
+                    ? ""
+                    : $"{Path.GetFileName(summary.LastErrorFile)} — {summary.LastError}";
+            }
+
+            LiveLog = await Task.Run(TailLog);
+            McpHealthy = await CanConnectAsync(_settings.Config.McpPort);
+            SidecarHealthy =
+                _settings.Config.SemanticEnabled
+                && await CanConnectAsync(_settings.Config.EmbeddingSidecarPort);
+        }
+        catch (Exception ex)
+        {
+            // Un tick ne doit jamais remonter d'exception non observee : on le trace en dernier ressort.
+            Debug.WriteLine("RefreshAsync: " + ex);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    private void UpdateEngineStatus()
+    {
+        try
+        {
+            EngineReady = _engine.IsReady;
+            if (!EngineReady)
+            {
+                EngineUpToDate = false;
+                EngineStatus = "Moteur Python : non installé";
+                return;
+            }
+            EngineUpToDate = _engine.IsUpToDate;
+            var installed = _engine.ReadManifest()?.AppVersion;
+            var suffix = string.IsNullOrEmpty(installed) ? "" : $" (v{installed})";
+            EngineStatus = EngineUpToDate
+                ? $"Moteur Python : à jour{suffix}"
+                : $"Moteur Python : mise à jour requise{suffix}";
+        }
+        catch
+        {
+            EngineStatus = "Moteur Python : état indéterminé";
+        }
+    }
+
+    private static string FormatDuration(TimeSpan d)
+    {
+        if (d < TimeSpan.Zero)
+            d = TimeSpan.Zero;
+        return d.TotalHours >= 1 ? d.ToString(@"h\:mm\:ss") : d.ToString(@"m\:ss");
+    }
+
+    private string TailLog()
+    {
+        try
+        {
+            var logDir = Path.Combine(ConfigStore.ExpandPath(_settings.Config.DataDir), "logs");
+            if (!Directory.Exists(logDir))
+                return "";
+            var latest = new DirectoryInfo(logDir)
+                .GetFiles("worker-*.log")
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+            if (latest is null)
+                return "";
+
+            using var fs = new FileStream(
+                latest.FullName,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite
+            );
+            // On ne lit que la fin du fichier (au plus 64 Ko) pour rester léger.
+            const long window = 64 * 1024;
+            if (fs.Length > window)
+                fs.Seek(-window, SeekOrigin.End);
+            using var sr = new StreamReader(fs);
+            var text = sr.ReadToEnd().Replace("\r", "");
+            var lines = text.Split('\n');
+            var tail = lines.Length > 200 ? lines[^200..] : lines;
+            return string.Join("\n", tail).TrimEnd();
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private static async Task<bool> CanConnectAsync(int port)
+    {
+        try
+        {
+            using var client = new TcpClient();
+            using var cts = new CancellationTokenSource(300);
+            await client.ConnectAsync("127.0.0.1", port, cts.Token);
+            return client.Connected;
+        }
+        catch
+        {
+            return false;
         }
     }
 

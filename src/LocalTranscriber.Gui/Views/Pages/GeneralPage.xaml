@@ -114,6 +114,62 @@
         </StackPanel>
       </materialDesign:Card>
 
+      <!-- File de traitement -->
+      <materialDesign:Card
+        Padding="20"
+        Margin="0,0,0,16"
+        materialDesign:ElevationAssist.Elevation="Dp2"
+      >
+        <StackPanel>
+          <TextBlock
+            Text="File de traitement"
+            FontSize="16"
+            FontWeight="Medium"
+            Margin="0,0,0,12"
+          />
+          <DockPanel LastChildFill="False" Margin="0,6">
+            <ToggleButton
+              DockPanel.Dock="Right"
+              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+              VerticalAlignment="Center"
+              Foreground="{DynamicResource PrimaryHueMidBrush}"
+              IsChecked="{Binding AutoRetryFailedJobs}"
+            />
+            <TextBlock
+              DockPanel.Dock="Left"
+              VerticalAlignment="Center"
+              FontSize="14"
+              Foreground="{DynamicResource MaterialDesignBody}"
+              Text="Réessayer automatiquement les fichiers en échec"
+            />
+          </DockPanel>
+          <StackPanel
+            Orientation="Horizontal"
+            Margin="0,8,0,0"
+            IsEnabled="{Binding AutoRetryFailedJobs}"
+          >
+            <TextBlock
+              Text="Tentatives maximum"
+              VerticalAlignment="Center"
+              Margin="0,0,12,0"
+            />
+            <TextBox
+              Width="72"
+              Style="{StaticResource MaterialDesignTextBox}"
+              Text="{Binding MaxAutoRetries, UpdateSourceTrigger=LostFocus}"
+              VerticalAlignment="Center"
+            />
+          </StackPanel>
+          <TextBlock
+            Text="Désactivé, les échecs restent en « Failed » et se relancent à la main (bouton Retraiter). Le compteur inclut la tentative initiale."
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+            FontSize="11"
+            TextWrapping="Wrap"
+            Margin="0,8,0,0"
+          />
+        </StackPanel>
+      </materialDesign:Card>
+
       <!-- Diarisation & locuteurs -->
       <materialDesign:Card
         Padding="20"

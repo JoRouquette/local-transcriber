@@ -1,19 +1,19 @@
 {
-  "_comment": "Le service LocalTranscriber expose le MCP en HTTP sur http://127.0.0.1:<mcpPort>/mcp (defaut 8765). Deux facons de le brancher a Claude Desktop.",
+  "_comment": "Exemple de configuration MCP pour Claude Desktop. Fichier reel : %APPDATA%\\Claude\\claude_desktop_config.json (Windows). Le service LocalTranscriber expose le MCP en HTTP sur http://127.0.0.1:<mcpPort>/mcp (defaut 8765 ; voir l'onglet 'A propos' de l'application). Le MCP n'est disponible que lorsque le worker tourne. Copiez UNE seule des deux variantes ci-dessous sous la cle 'mcpServers', puis redemarrez completement Claude Desktop. Guide detaille : docs/mcp-claude-desktop.md.",
 
-  "_variante_A_pont_mcp_remote": {
+  "_variante_A_url_native_si_supportee": {
     "mcpServers": {
       "local-transcriber": {
-        "command": "npx",
-        "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]
+        "url": "http://127.0.0.1:8765/mcp"
       }
     }
   },
 
-  "_variante_B_url_native_si_supportee": {
+  "_variante_B_pont_mcp_remote_compatible_partout": {
     "mcpServers": {
       "local-transcriber": {
-        "url": "http://127.0.0.1:8765/mcp"
+        "command": "npx",
+        "args": ["-y", "mcp-remote", "http://127.0.0.1:8765/mcp"]
       }
     }
   }

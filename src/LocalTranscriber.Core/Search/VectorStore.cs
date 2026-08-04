@@ -41,6 +41,12 @@ public sealed class VectorStore
     {
         var c = new SqliteConnection(_connectionString);
         c.Open();
+        if (!_readOnly)
+        {
+            using var pragma = c.CreateCommand();
+            pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+            pragma.ExecuteNonQuery();
+        }
         return c;
     }
 
@@ -170,14 +176,18 @@ public sealed class VectorStore
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
+        // Filtre par dimension : seuls les vecteurs de meme dimension que la requete sont
+        // comparables. Ecarte d'emblee les vecteurs produits par un modele d'embedding different.
         cmd.CommandText = """
             SELECT path, project, base_name, speaker, start, text, vector
             FROM chunks
             WHERE ($proj IS NULL OR project = $proj)
               AND ($spk IS NULL OR speaker = $spk)
+              AND dim = $qdim
             """;
         cmd.Parameters.AddWithValue("$proj", (object?)project ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$spk", (object?)speaker ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$qdim", query.Length);
 
         var scored = new List<VectorHit>();
         using (var r = cmd.ExecuteReader())
@@ -204,9 +214,12 @@ public sealed class VectorStore
 
     private static double Dot(float[] a, float[] b)
     {
-        var n = Math.Min(a.Length, b.Length);
+        // Dimensions differentes = vecteurs non comparables : score neutre (0) plutot qu'un
+        // produit partiel trompeur. En pratique la requete SQL filtre deja par dimension.
+        if (a.Length != b.Length)
+            return 0;
         double sum = 0;
-        for (var i = 0; i < n; i++)
+        for (var i = 0; i < a.Length; i++)
             sum += a[i] * b[i];
         return sum;
     }
