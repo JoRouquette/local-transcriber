@@ -35,7 +35,9 @@ public sealed class Worker : BackgroundService
     private readonly Dictionary<string, (long Size, long Mtime)> _seen = new(
         StringComparer.OrdinalIgnoreCase
     );
-    private readonly EngineSetup _engineSetup = new();
+    private EngineSetup _engineSetup = new();
+    private string _dataDir = "";
+    private EngineLogSink? _log;
     private bool _quietLogged;
     private bool _engineMissingLogged;
 
@@ -153,13 +155,17 @@ public sealed class Worker : BackgroundService
         _config = ConfigStore.Load(path);
         _configMtime = mtime;
 
-        var dataDir = ConfigStore.ExpandPath(_config.DataDir);
-        Directory.CreateDirectory(dataDir);
-        _jobs = new JobStore(Path.Combine(dataDir, "jobs.db"));
+        _dataDir = ConfigStore.ExpandPath(_config.DataDir);
+        Directory.CreateDirectory(_dataDir);
+        _jobs = new JobStore(Path.Combine(_dataDir, "jobs.db"));
         _jobs.RequeueStale();
-        _commands = new CommandStore(Path.Combine(dataDir, "commands.db"));
+        _commands = new CommandStore(Path.Combine(_dataDir, "commands.db"));
         _seen.Clear();
 
+        _log = new EngineLogSink(Path.Combine(_dataDir, "logs"));
+        _sidecar.OnLog = _log.Write;
+
+        _engineSetup = EngineSetup.FromConfig(_config);
         _enginePath = ResolveEnginePath(_config.EngineExecutable);
         _hfToken = LoadHfToken();
         _runner = new PythonEngineRunner(_enginePath, _hfToken, _logger);
@@ -325,12 +331,42 @@ public sealed class Worker : BackgroundService
         if (_jobs is null || _runner is null)
             return;
 
+        var cancelFlag = ControlSignals.CancelCurrentFlag(_dataDir);
+        // Un drapeau reste d'une session precedente ne doit pas annuler le prochain job.
+        TryDelete(cancelFlag);
+
         TranscriptionJob? job;
         while (!ct.IsCancellationRequested && (job = _jobs.DequeueNext()) is not null)
         {
             _logger.LogInformation("Traitement : {File}", job.AudioPath);
+            _log?.Write($"[job] debut : {job.AudioPath}");
+
             var request = BuildRequest(job);
-            var result = await _runner.RunAsync(request, ct);
+
+            // CTS lie au worker + annulable par le drapeau d'annulation depose par la GUI.
+            using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            using var pollStop = new CancellationTokenSource();
+            var poller = WatchCancelAsync(cancelFlag, jobCts, pollStop.Token);
+
+            EngineResult result;
+            try
+            {
+                result = await _runner.RunAsync(request, line => _log?.Write(line), jobCts.Token);
+            }
+            finally
+            {
+                pollStop.Cancel();
+                await poller;
+            }
+
+            if (result.Status == "cancelled")
+            {
+                _jobs.MarkFailed(job.Id, "Annule par l'utilisateur.");
+                _logger.LogWarning("Annule : {File}", job.AudioPath);
+                _log?.Write($"[job] annule : {job.AudioPath}");
+                // Annulation explicite : on ne poursuit pas la file dans cette passe.
+                break;
+            }
 
             if (result.IsSuccess)
             {
@@ -341,6 +377,9 @@ public sealed class Worker : BackgroundService
                     result.SegmentCount,
                     result.SpeakerCount
                 );
+                _log?.Write(
+                    $"[job] termine : {job.AudioPath} ({result.SegmentCount} segments, {result.SpeakerCount} locuteurs)"
+                );
 
                 if (_config.SemanticEnabled && result.JsonPath is { } jp && File.Exists(jp))
                     await VectorizeAsync(jp, ConfigStore.ExpandPath(_config.OutputRoot), ct);
@@ -349,7 +388,50 @@ public sealed class Worker : BackgroundService
             {
                 _jobs.MarkFailed(job.Id, result.Error ?? "erreur inconnue");
                 _logger.LogError("Echec : {File} — {Error}", job.AudioPath, result.Error);
+                _log?.Write($"[job] echec : {job.AudioPath} — {result.Error}");
             }
+        }
+    }
+
+    /// <summary>
+    /// Surveille le drapeau d'annulation pendant un traitement. Si la GUI le depose, annule le
+    /// job en cours (le moteur est alors tue par <see cref="PythonEngineRunner"/>).
+    /// </summary>
+    private async Task WatchCancelAsync(
+        string flagPath,
+        CancellationTokenSource jobCts,
+        CancellationToken until
+    )
+    {
+        try
+        {
+            while (!until.IsCancellationRequested && !jobCts.IsCancellationRequested)
+            {
+                if (File.Exists(flagPath))
+                {
+                    TryDelete(flagPath);
+                    _logger.LogWarning("Annulation du traitement en cours demandee.");
+                    _log?.Write("[job] annulation demandee");
+                    jobCts.Cancel();
+                    return;
+                }
+                await Task.Delay(1000, until);
+            }
+        }
+        catch (OperationCanceledException)
+        { /* le job s'est termine normalement : arret du poller */
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        { /* best effort */
         }
     }
 

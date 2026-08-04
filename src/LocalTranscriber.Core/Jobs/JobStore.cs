@@ -10,7 +10,8 @@ public sealed record JobSummary(
     int Failed,
     string? CurrentFile,
     string? LastError,
-    string? LastErrorFile
+    string? LastErrorFile,
+    DateTime? CurrentStartedAt
 );
 
 /// <summary>
@@ -64,6 +65,24 @@ public sealed class JobStore
             CREATE INDEX IF NOT EXISTS ix_jobs_status ON jobs(status);
             """;
         cmd.ExecuteNonQuery();
+
+        // Migrations additives (bases creees par des versions anterieures) : SQLite n'a pas de
+        // "ADD COLUMN IF NOT EXISTS", on ignore l'erreur "duplicate column".
+        AddColumnIfMissing(c, "started_at", "TEXT");
+        AddColumnIfMissing(c, "finished_at", "TEXT");
+    }
+
+    private static void AddColumnIfMissing(SqliteConnection c, string column, string type)
+    {
+        try
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = $"ALTER TABLE jobs ADD COLUMN {column} {type}";
+            cmd.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        { /* colonne deja presente */
+        }
     }
 
     public bool AlreadyKnown(string fileHash)
@@ -124,14 +143,20 @@ public sealed class JobStore
             };
         }
 
+        var now = DateTime.UtcNow.ToString("o");
         using var upd = c.CreateCommand();
         upd.Transaction = tx;
         upd.CommandText =
-            "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now WHERE id=$id";
-        upd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+            "UPDATE jobs SET status='Processing', attempts=attempts+1, updated_at=$now, started_at=$now, finished_at=NULL WHERE id=$id";
+        upd.Parameters.AddWithValue("$now", now);
         upd.Parameters.AddWithValue("$id", id);
         upd.ExecuteNonQuery();
         tx.Commit();
+        job.StartedAt = DateTime.Parse(
+            now,
+            null,
+            System.Globalization.DateTimeStyles.RoundtripKind
+        );
         return job;
     }
 
@@ -154,7 +179,8 @@ public sealed class JobStore
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "UPDATE jobs SET status=$s, error=$e, updated_at=$now WHERE id=$id";
+        cmd.CommandText =
+            "UPDATE jobs SET status=$s, error=$e, updated_at=$now, finished_at=$now WHERE id=$id";
         cmd.Parameters.AddWithValue("$s", status.ToString());
         cmd.Parameters.AddWithValue("$e", (object?)error ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
@@ -197,12 +223,23 @@ public sealed class JobStore
             while (r.Read())
                 counts[r.GetString(0)] = r.GetInt32(1);
         }
-        string? current;
+        string? current = null;
+        DateTime? currentStarted = null;
         using (var cmd = c.CreateCommand())
         {
             cmd.CommandText =
-                "SELECT audio_path FROM jobs WHERE status='Processing' ORDER BY updated_at DESC LIMIT 1";
-            current = cmd.ExecuteScalar() as string;
+                "SELECT audio_path, started_at FROM jobs WHERE status='Processing' ORDER BY updated_at DESC LIMIT 1";
+            using var r = cmd.ExecuteReader();
+            if (r.Read())
+            {
+                current = r.GetString(0);
+                if (!r.IsDBNull(1))
+                    currentStarted = DateTime.Parse(
+                        r.GetString(1),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    );
+            }
         }
         string? lastErr = null,
             lastErrFile = null;
@@ -225,7 +262,8 @@ public sealed class JobStore
             Get("Failed"),
             current,
             lastErr,
-            lastErrFile
+            lastErrFile,
+            currentStarted
         );
     }
 
@@ -234,10 +272,18 @@ public sealed class JobStore
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText =
-            "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts FROM jobs ORDER BY id DESC LIMIT $l";
+            "SELECT id, audio_path, file_hash, output_dir, base_name, status, created_at, updated_at, error, attempts, started_at, finished_at FROM jobs ORDER BY id DESC LIMIT $l";
         cmd.Parameters.AddWithValue("$l", limit);
         var list = new List<TranscriptionJob>();
         using var r = cmd.ExecuteReader();
+        DateTime? ParseUtc(int i) =>
+            r.IsDBNull(i)
+                ? null
+                : DateTime.Parse(
+                    r.GetString(i),
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind
+                );
         while (r.Read())
         {
             list.Add(
@@ -253,6 +299,8 @@ public sealed class JobStore
                     UpdatedAt = DateTime.Parse(r.GetString(7)),
                     Error = r.IsDBNull(8) ? null : r.GetString(8),
                     Attempts = r.GetInt32(9),
+                    StartedAt = ParseUtc(10),
+                    FinishedAt = ParseUtc(11),
                 }
             );
         }

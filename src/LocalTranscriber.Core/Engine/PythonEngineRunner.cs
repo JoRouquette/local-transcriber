@@ -25,7 +25,12 @@ public sealed class PythonEngineRunner
         _logger = logger ?? NullLogger.Instance;
     }
 
-    public async Task<EngineResult> RunAsync(EngineRequest request, CancellationToken ct = default)
+    /// <param name="onLog">Reçoit les lignes de log (stderr) du moteur, en temps réel.</param>
+    public async Task<EngineResult> RunAsync(
+        EngineRequest request,
+        Action<string>? onLog = null,
+        CancellationToken ct = default
+    )
     {
         if (!File.Exists(_enginePath))
             return new EngineResult
@@ -58,9 +63,10 @@ public sealed class PythonEngineRunner
             psi.Environment["HF_TOKEN"] = _hfToken;
 
         var stdout = new StringBuilder();
+        Process? proc = null;
         try
         {
-            using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             proc.OutputDataReceived += (_, e) =>
             {
                 if (e.Data != null)
@@ -68,8 +74,10 @@ public sealed class PythonEngineRunner
             };
             proc.ErrorDataReceived += (_, e) =>
             {
-                if (e.Data != null)
-                    _logger.LogDebug("[engine] {Line}", e.Data);
+                if (e.Data == null)
+                    return;
+                _logger.LogDebug("[engine] {Line}", e.Data);
+                onLog?.Invoke(e.Data);
             };
 
             proc.Start();
@@ -95,6 +103,18 @@ public sealed class PythonEngineRunner
                     Error = "Resultat moteur illisible.",
                 };
         }
+        catch (OperationCanceledException)
+        {
+            // Annulation (arret du worker ou annulation du job) : on tue le process moteur
+            // et son arbre pour ne pas laisser de Python orphelin, puis on signale l'annulation.
+            KillTree(proc);
+            return new EngineResult
+            {
+                Status = "cancelled",
+                AudioPath = request.AudioPath,
+                Error = "Traitement annule.",
+            };
+        }
         catch (Exception ex)
         {
             return new EngineResult
@@ -106,6 +126,7 @@ public sealed class PythonEngineRunner
         }
         finally
         {
+            proc?.Dispose();
             try
             {
                 File.Delete(reqPath);
@@ -113,6 +134,21 @@ public sealed class PythonEngineRunner
             catch
             { /* best effort */
             }
+        }
+    }
+
+    private static void KillTree(Process? proc)
+    {
+        try
+        {
+            if (proc is { HasExited: false })
+            {
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(3000);
+            }
+        }
+        catch
+        { /* best effort */
         }
     }
 }

@@ -4,6 +4,7 @@
   "model_cache_dir": "%PROGRAMDATA%\\LocalTranscriber\\models",
   "data_dir": "%PROGRAMDATA%\\LocalTranscriber\\data",
   "engine_executable": "engine\\transcriber-engine.exe",
+  "engine_env_dir": "%LOCALAPPDATA%\\LocalTranscriberData\\engine-env",
   "auto_install_updates": true,
   "hf_token": "",
   "file_types": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
