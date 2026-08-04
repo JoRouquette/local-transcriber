@@ -35,6 +35,8 @@ public partial class App : Application
             var window = Services.GetRequiredService<MainWindow>();
             window.DataContext = Services.GetRequiredService<ShellViewModel>();
             window.Show();
+
+            EnsureWorkerRunning();
         }
         catch (Exception ex)
         {
@@ -84,6 +86,38 @@ public partial class App : Application
         catch
         { /* la notification ne doit jamais aggraver la situation */
         }
+    }
+
+    /// <summary>
+    /// Au démarrage, si le worker de fond est installé mais arrêté, on le (re)lance. Utile après
+    /// une mise à jour (le worker est arrêté pour libérer `current\`) ou un arrêt manuel. Ne lève jamais.
+    /// </summary>
+    private static void EnsureWorkerRunning()
+    {
+        try
+        {
+            if (WindowsServiceControl.QueryState() == WorkerState.Stopped)
+                WindowsServiceControl.Start();
+        }
+        catch (Exception ex)
+        {
+            LogCrash("EnsureWorkerRunning", ex);
+        }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        // Si une mise à jour est programmée pour la fermeture, on arrête le worker maintenant
+        // pour que le remplacement Velopack (post-sortie du processus) trouve `current\` libre.
+        try
+        {
+            Services?.GetService<UpdateService>()?.OnAppExit();
+        }
+        catch (Exception ex)
+        {
+            LogCrash("OnExit", ex);
+        }
+        base.OnExit(e);
     }
 
     private static string CrashLogPath =>
