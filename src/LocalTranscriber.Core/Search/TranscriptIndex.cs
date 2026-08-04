@@ -50,6 +50,12 @@ public sealed class TranscriptIndex
     {
         var c = new SqliteConnection(_connectionString);
         c.Open();
+        if (!_readOnly)
+        {
+            using var pragma = c.CreateCommand();
+            pragma.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;";
+            pragma.ExecuteNonQuery();
+        }
         return c;
     }
 
@@ -237,6 +243,19 @@ public sealed class TranscriptIndex
         tx.Commit();
     }
 
+    /// <summary>
+    /// Echappe une requete utilisateur brute pour FTS5 : chaque terme (decoupe sur les espaces)
+    /// est encadre de guillemets doubles, les guillemets internes etant doubles. Evite les erreurs
+    /// de syntaxe FTS5 quand la saisie contient des caracteres speciaux (", *, :, parentheses...).
+    /// </summary>
+    public static string EscapeFtsQuery(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+            return query;
+        var terms = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(' ', terms.Select(t => "\"" + t.Replace("\"", "\"\"") + "\""));
+    }
+
     public IReadOnlyList<TranscriptHit> Search(
         string query,
         string? project = null,
@@ -257,7 +276,7 @@ public sealed class TranscriptIndex
             ORDER BY rank
             LIMIT $l;
             """;
-        cmd.Parameters.AddWithValue("$q", query);
+        cmd.Parameters.AddWithValue("$q", EscapeFtsQuery(query));
         cmd.Parameters.AddWithValue("$proj", (object?)project ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$spk", (object?)speaker ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$l", limit);

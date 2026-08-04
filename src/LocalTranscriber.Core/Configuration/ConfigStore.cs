@@ -101,17 +101,35 @@ public static class ConfigStore
         Directory.CreateDirectory(dir);
 
         // Le secret (hf_token) ne va pas dans le config partageable, mais dans config.local.json.
+        // try/finally : le token est toujours restaure en memoire, meme si la serialisation leve.
         var token = config.HfToken;
         config.HfToken = null;
-        File.WriteAllText(path, JsonSerializer.Serialize(config, JsonDefaults.Options));
-        config.HfToken = token; // restaure l'objet en memoire
+        try
+        {
+            WriteAtomic(path, JsonSerializer.Serialize(config, JsonDefaults.Options));
+        }
+        finally
+        {
+            config.HfToken = token; // restaure l'objet en memoire
+        }
 
         var localPath = Path.Combine(dir, LocalFileName);
         if (!string.IsNullOrWhiteSpace(token))
-            File.WriteAllText(
+            WriteAtomic(
                 localPath,
                 JsonSerializer.Serialize(new LocalSecrets { HfToken = token }, JsonDefaults.Options)
             );
+        else if (File.Exists(localPath))
+            // Plus de token : on retire le fichier de secrets plutot que de laisser un secret perime.
+            File.Delete(localPath);
+    }
+
+    /// <summary>Ecriture atomique : fichier temporaire puis remplacement par <see cref="File.Move"/>.</summary>
+    private static void WriteAtomic(string destPath, string content)
+    {
+        var tempPath = destPath + ".tmp";
+        File.WriteAllText(tempPath, content);
+        File.Move(tempPath, destPath, overwrite: true);
     }
 
     private sealed class LocalSecrets

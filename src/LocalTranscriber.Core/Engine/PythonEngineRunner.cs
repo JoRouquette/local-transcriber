@@ -63,19 +63,36 @@ public sealed class PythonEngineRunner
             psi.Environment["HF_TOKEN"] = _hfToken;
 
         var stdout = new StringBuilder();
+        var bufferLock = new object();
+        // Les handlers de flux tournent sur des threads du pool : on ne considere la lecture
+        // terminee que lorsque la ligne sentinelle (e.Data == null) est recue pour chaque flux.
+        var stdoutDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var stderrDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         Process? proc = null;
         try
         {
             proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             proc.OutputDataReceived += (_, e) =>
             {
-                if (e.Data != null)
+                if (e.Data == null)
+                {
+                    stdoutDone.TrySetResult(true);
+                    return;
+                }
+                lock (bufferLock)
                     stdout.AppendLine(e.Data);
             };
             proc.ErrorDataReceived += (_, e) =>
             {
                 if (e.Data == null)
+                {
+                    stderrDone.TrySetResult(true);
                     return;
+                }
                 _logger.LogDebug("[engine] {Line}", e.Data);
                 onLog?.Invoke(e.Data);
             };
@@ -84,8 +101,13 @@ public sealed class PythonEngineRunner
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
             await proc.WaitForExitAsync(ct);
+            // On attend le drainage complet des deux flux avant de lire les buffers : les handlers
+            // peuvent encore avoir des lignes en attente au moment ou le process se termine.
+            await Task.WhenAll(stdoutDone.Task, stderrDone.Task);
 
-            var raw = stdout.ToString().Trim();
+            string raw;
+            lock (bufferLock)
+                raw = stdout.ToString().Trim();
             if (string.IsNullOrEmpty(raw))
                 return new EngineResult
                 {

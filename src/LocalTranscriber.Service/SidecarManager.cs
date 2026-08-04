@@ -58,6 +58,9 @@ public sealed class SidecarManager : IDisposable
             psi.ArgumentList.Add(cacheDir);
         }
 
+        // Libere l'ancienne instance (processus deja sorti) avant de reaffecter, pour ne pas
+        // fuir le handle de process a chaque redemarrage du sidecar.
+        _proc?.Dispose();
         _proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _proc.OutputDataReceived += (_, e) =>
         {

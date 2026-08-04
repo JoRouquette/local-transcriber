@@ -15,7 +15,7 @@ import socket
 import sys
 from typing import Optional
 
-from .embeddings import DEFAULT_MODEL, Embedder
+from .embeddings import Embedder
 
 
 def _eprint(*args: object) -> None:
@@ -40,11 +40,28 @@ def serve(port: int, model_name: str, cache_dir: Optional[str], device: str = "c
             conn, _ = srv.accept()
             with conn, conn.makefile("rwb", buffering=0) as stream:
                 for raw in stream:
-                    line = raw.decode("utf-8").strip()
-                    if not line:
-                        continue
-                    resp = _handle(embedder, line)
-                    stream.write((json.dumps(resp) + "\n").encode("utf-8"))
+                    # Traitement ligne par ligne, isole pour ne jamais tuer le
+                    # serveur resident sur une erreur d'une seule requete.
+                    try:
+                        try:
+                            line = raw.decode("utf-8").strip()
+                        except UnicodeDecodeError:
+                            # Ligne non-UTF-8 : on signale sans casser la connexion.
+                            resp = {"error": "invalid utf-8 payload"}
+                        else:
+                            if not line:
+                                continue
+                            resp = _handle(embedder, line)
+                        stream.write((json.dumps(resp) + "\n").encode("utf-8"))
+                    except (
+                        BrokenPipeError,
+                        ConnectionResetError,
+                        ConnectionError,
+                        OSError,
+                    ):
+                        # Ecriture impossible : le client a coupe -> on rompt juste
+                        # cette connexion, le serveur reste a l'ecoute.
+                        break
     except KeyboardInterrupt:
         return 0
     finally:
@@ -55,6 +72,8 @@ def _handle(embedder: Embedder, line: str) -> dict:
     try:
         req = json.loads(line)
         texts = req.get("texts", [])
+        if not isinstance(texts, list):
+            return {"error": "texts must be a list"}
         kind = req.get("kind", "passage")
         vecs = embedder.embed(texts, kind)
         return {"vectors": vecs.tolist(), "dim": embedder.dim, "model": embedder.model_name}

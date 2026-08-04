@@ -1,5 +1,5 @@
 <#
-Installe l'environnement de dev pinné (stack whisperx 3.1 / pyannote 3.1) dans le
+Installe l'environnement de dev pinné (stack whisperx 3.3.1 / pyannote 3.3.2) dans le
 venv engine\.venv existant. torch CPU 2.2.2. Log UTF-8 + detection d'echec.
 Marqueur final : DEV-INSTALL-DONE fail=X
 #>
@@ -16,9 +16,11 @@ function Log($m) { $m | Out-File -FilePath $log -Encoding utf8 -Append }
 Log "pip upgrade..."
 & $py -m pip install --upgrade pip *>&1 | Out-File -FilePath $log -Encoding utf8 -Append
 
+# Pins torch/torchaudio centralises dans engine\constraints-torch-cpu.txt (2.2.2).
+$torchConstraints = Join-Path $engine "constraints-torch-cpu.txt"
 $torchIndex = if ($Cuda) { "https://download.pytorch.org/whl/cu121" } else { "https://download.pytorch.org/whl/cpu" }
 Log "torch 2.2.2 ($torchIndex)..."
-& $py -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url $torchIndex *>&1 | Out-File -FilePath $log -Encoding utf8 -Append
+& $py -m pip install -r $torchConstraints --index-url $torchIndex *>&1 | Out-File -FilePath $log -Encoding utf8 -Append
 if ($LASTEXITCODE -ne 0) { $fail = 1; Log "ECHEC torch (rc=$LASTEXITCODE)" }
 
 Log "requirements..."

@@ -172,7 +172,7 @@ public sealed class EngineSetup
             Report("Reinstallation propre : suppression de l'environnement existant…");
             try
             {
-                DeleteEnvRobust(progress, ct);
+                await DeleteEnvRobust(progress, ct);
             }
             catch (UnauthorizedAccessException)
             {
@@ -290,7 +290,7 @@ public sealed class EngineSetup
     /// quelques fois (un verrou antivirus ou un handle en cours de liberation peut echouer une
     /// premiere tentative). Laisse remonter l'exception finale pour un message clair.
     /// </summary>
-    private void DeleteEnvRobust(IProgress<string>? progress, CancellationToken ct)
+    private async Task DeleteEnvRobust(IProgress<string>? progress, CancellationToken ct)
     {
         if (!Directory.Exists(EnvDir))
             return;
@@ -320,7 +320,7 @@ public sealed class EngineSetup
                 progress?.Report(
                     $"Suppression de l'environnement… nouvelle tentative ({attempt}/3) : {ex.Message}"
                 );
-                Thread.Sleep(1000);
+                await Task.Delay(1000, ct);
             }
         }
     }
@@ -343,9 +343,10 @@ public sealed class EngineSetup
         foreach (var a in args)
             psi.ArgumentList.Add(a);
 
+        Process? proc = null;
         try
         {
-            using var proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            proc = new Process { StartInfo = psi, EnableRaisingEvents = true };
             proc.OutputDataReceived += (_, e) =>
             {
                 if (e.Data != null)
@@ -369,10 +370,35 @@ public sealed class EngineSetup
             }
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            // Annulation : on tue l'arbre de process pour ne pas laisser uv/pip orphelin.
+            KillTree(proc);
+            return false;
+        }
         catch (Exception ex)
         {
             progress?.Report("Erreur : " + ex.Message);
             return false;
+        }
+        finally
+        {
+            proc?.Dispose();
+        }
+    }
+
+    private static void KillTree(Process? proc)
+    {
+        try
+        {
+            if (proc is { HasExited: false })
+            {
+                proc.Kill(entireProcessTree: true);
+                proc.WaitForExit(3000);
+            }
+        }
+        catch
+        { /* best effort */
         }
     }
 }

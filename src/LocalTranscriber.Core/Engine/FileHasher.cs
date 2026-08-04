@@ -16,7 +16,8 @@ public static class FileHasher
         using var fs = File.OpenRead(path);
 
         var head = new byte[Math.Min(chunk, (int)Math.Min(info.Length, chunk))];
-        _ = fs.Read(head, 0, head.Length);
+        // ReadExactly : garantit le remplissage complet du buffer (Read peut renvoyer moins).
+        fs.ReadExactly(head, 0, head.Length);
         sha.TransformBlock(head, 0, head.Length, null, 0);
 
         if (info.Length > chunk)

@@ -122,6 +122,16 @@ public sealed class AppConfig
     public int StabilizationSeconds { get; set; } = 5;
     public int MaxParallelJobs { get; set; } = 1;
 
+    /// <summary>
+    /// Retente automatiquement les fichiers en echec au prochain scan, tant que leur nombre de
+    /// tentatives reste sous <see cref="MaxAutoRetries"/>. Desactive par defaut : sinon les echecs
+    /// restent en Failed (retraitement manuel via le bouton Retraiter).
+    /// </summary>
+    public bool AutoRetryFailedJobs { get; set; } = false;
+
+    /// <summary>Plafond de tentatives automatiques (tentative initiale incluse) avant abandon definitif.</summary>
+    public int MaxAutoRetries { get; set; } = 3;
+
     // ---- Serveur MCP (HTTP local) et recherche semantique ----
     public int McpPort { get; set; } = 8765;
     public bool SemanticEnabled { get; set; } = true;

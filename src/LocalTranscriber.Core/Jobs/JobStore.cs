@@ -89,13 +89,19 @@ public sealed class JobStore
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
+        // Failed est inclus : un fichier deja tente et echoue ne doit pas etre re-enfile en boucle
+        // par le scan. Le retraitement manuel (bouton Retraiter) passe par un autre chemin.
         cmd.CommandText =
-            "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done')";
+            "SELECT COUNT(1) FROM jobs WHERE file_hash=$h AND status IN ('Pending','Processing','Done','Failed')";
         cmd.Parameters.AddWithValue("$h", fileHash);
         return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 
-    /// <summary>Ajoute un job s'il n'existe pas deja. Retourne l'id, ou null si ignore.</summary>
+    /// <summary>
+    /// Ajoute un job s'il n'existe pas deja (INSERT OR IGNORE sur le hash) et retourne son id.
+    /// Le SELECT final renvoie toujours l'id, qu'il s'agisse d'une insertion ou d'un doublon
+    /// ignore : la valeur n'est donc jamais null en pratique.
+    /// </summary>
     public long? Enqueue(string audioPath, string fileHash, string outputDir, string baseName)
     {
         using var c = Open();
@@ -119,7 +125,9 @@ public sealed class JobStore
     public TranscriptionJob? DequeueNext()
     {
         using var c = Open();
-        using var tx = c.BeginTransaction();
+        // IMMEDIATE : SELECT + UPDATE se font sous un verrou d'ecriture pris d'emblee, sans
+        // promotion read->write — deux workers ne peuvent pas prendre le meme job en concurrence.
+        using var tx = c.BeginTransaction(deferred: false);
         using var sel = c.CreateCommand();
         sel.Transaction = tx;
         sel.CommandText =
@@ -163,6 +171,25 @@ public sealed class JobStore
     public void MarkDone(long id) => SetStatus(id, JobStatus.Done, null);
 
     public void MarkFailed(long id, string error) => SetStatus(id, JobStatus.Failed, error);
+
+    /// <summary>
+    /// Retry auto configurable : repasse en Pending les jobs Failed dont le nombre de tentatives
+    /// reste strictement sous <paramref name="maxAttempts"/> (attempts est incremente a chaque
+    /// DequeueNext, donc maxAttempts = nombre total de tentatives autorisees). Retourne le nombre
+    /// de jobs re-enfiles. Un maxAttempts &lt;= 0 ne retente rien.
+    /// </summary>
+    public int RequeueFailedForRetry(int maxAttempts)
+    {
+        if (maxAttempts <= 0)
+            return 0;
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Failed' AND attempts < $max";
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+        cmd.Parameters.AddWithValue("$max", maxAttempts);
+        return cmd.ExecuteNonQuery();
+    }
 
     /// <summary>Repasse en Pending les jobs restes Processing (ex. apres un crash du service).</summary>
     public int RequeueStale()
@@ -295,8 +322,16 @@ public sealed class JobStore
                     OutputDir = r.GetString(3),
                     BaseName = r.GetString(4),
                     Status = Enum.Parse<JobStatus>(r.GetString(5)),
-                    CreatedAt = DateTime.Parse(r.GetString(6)),
-                    UpdatedAt = DateTime.Parse(r.GetString(7)),
+                    CreatedAt = DateTime.Parse(
+                        r.GetString(6),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    ),
+                    UpdatedAt = DateTime.Parse(
+                        r.GetString(7),
+                        null,
+                        System.Globalization.DateTimeStyles.RoundtripKind
+                    ),
                     Error = r.IsDBNull(8) ? null : r.GetString(8),
                     Attempts = r.GetInt32(9),
                     StartedAt = ParseUtc(10),

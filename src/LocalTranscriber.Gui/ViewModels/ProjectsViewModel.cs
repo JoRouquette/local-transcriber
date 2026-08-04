@@ -22,8 +22,10 @@ public sealed partial class ProjectsViewModel : ObservableObject
     {
         _settings = settings;
         _snackbar = snackbar;
-        DiscoverProjects(announce: false); // sync auto au démarrage
-        _settings.Reloaded += () => DiscoverProjects(announce: false);
+        // Sync auto au démarrage/rechargement : en mémoire uniquement, sans réécrire
+        // config.local.json (qui contient le token) sans action explicite de l'utilisateur.
+        DiscoverProjects(announce: false, persist: false);
+        _settings.Reloaded += () => DiscoverProjects(announce: false, persist: false);
     }
 
     /// <summary>
@@ -32,9 +34,9 @@ public sealed partial class ProjectsViewModel : ObservableObject
     /// leurs réglages. Persiste si des nouveautés sont détectées.
     /// </summary>
     [RelayCommand]
-    private void RefreshProjects() => DiscoverProjects(announce: true);
+    private void RefreshProjects() => DiscoverProjects(announce: true, persist: true);
 
-    private void DiscoverProjects(bool announce)
+    private void DiscoverProjects(bool announce, bool persist)
     {
         try
         {
@@ -66,7 +68,8 @@ public sealed partial class ProjectsViewModel : ObservableObject
                 known.Add(name);
                 added++;
             }
-            if (added > 0)
+            // On ne persiste (réécriture de config.local.json) que sur action explicite.
+            if (added > 0 && persist)
                 _settings.Save();
             if (announce)
                 _snackbar.Enqueue(

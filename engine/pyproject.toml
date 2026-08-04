@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "transcriber-engine"
 version = "0.1.0"
 description = "Moteur local de transcription / diarisation / embeddings pour LocalTranscriber"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.12"
 # Les dependances lourdes (torch, whisperx, pyannote, sentence-transformers) sont
 # installees via requirements.txt. Ici on ne declare que le point d'entree console :
 # `pip install -e . --no-deps` cree engine\.venv\Scripts\transcriber-engine.exe,

@@ -1,0 +1,12 @@
+# Pins PyTorch CPU pour la reproductibilite (finding audit M7).
+#
+# torch/torchaudio ne sont PAS dans requirements.txt : ils doivent etre installes
+# EN AMONT, avant requirements.txt, depuis l'index CPU dedie de PyTorch. Utiliser :
+#
+#   pip install -r constraints-torch-cpu.txt --index-url https://download.pytorch.org/whl/cpu
+#
+# Pour un build GPU CUDA 12.1, remplacer l'index par :
+#   https://download.pytorch.org/whl/cu121
+# (memes versions 2.2.2 ; voir README / build-engine.ps1).
+torch==2.2.2
+torchaudio==2.2.2

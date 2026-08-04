@@ -27,6 +27,9 @@ public sealed partial class ServiceViewModel : ObservableObject
     private readonly DispatcherTimer _timer;
     private EngineSetup _engine;
 
+    // Garde de re-entrance : un tick est ignore si un rafraichissement est deja en cours.
+    private bool _refreshing;
+
     public ServiceViewModel(SettingsService settings, ISnackbarMessageQueue snackbar)
     {
         _settings = settings;
@@ -34,9 +37,19 @@ public sealed partial class ServiceViewModel : ObservableObject
         _engine = EngineSetup.FromConfig(settings.Config);
         Jobs = new ObservableCollection<TranscriptionJob>();
 
+        // La config peut etre rechargee : on reconstruit le moteur sur la config a jour.
+        _settings.Reloaded += OnSettingsReloaded;
+
         _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         _timer.Tick += async (_, _) => await RefreshAsync();
         _timer.Start();
+        _ = RefreshAsync();
+    }
+
+    /// <summary>Recharge : le moteur pointait sur une config perimee, on le recree.</summary>
+    private void OnSettingsReloaded()
+    {
+        _engine = EngineSetup.FromConfig(_settings.Config);
         _ = RefreshAsync();
     }
 
@@ -273,40 +286,57 @@ public sealed partial class ServiceViewModel : ObservableObject
 
     public async Task RefreshAsync()
     {
-        var status = await Task.Run(WindowsServiceControl.QueryStatus);
-        ServiceStatus = status;
-        IsRunning = status.Contains("cours", StringComparison.OrdinalIgnoreCase);
-
-        UpdateEngineStatus();
-
-        var jobs = await Task.Run(LoadJobs);
-        Jobs.Clear();
-        foreach (var j in jobs)
-            Jobs.Add(j);
-
-        var summary = await Task.Run(LoadSummary);
-        if (summary is not null)
+        // Un rafraichissement deja en cours : on saute ce tick pour eviter le chevauchement.
+        if (_refreshing)
+            return;
+        _refreshing = true;
+        try
         {
-            PendingCount = summary.Pending;
-            ProcessingCount = summary.Processing;
-            DoneCount = summary.Done;
-            FailedCount = summary.Failed;
-            CurrentFile = string.IsNullOrEmpty(summary.CurrentFile)
-                ? "—"
-                : Path.GetFileName(summary.CurrentFile);
-            CurrentElapsed = summary.CurrentStartedAt is { } started
-                ? FormatDuration(DateTime.UtcNow - started)
-                : "";
-            LastError = string.IsNullOrEmpty(summary.LastError)
-                ? ""
-                : $"{Path.GetFileName(summary.LastErrorFile)} — {summary.LastError}";
-        }
+            var state = await Task.Run(WindowsServiceControl.QueryState);
+            ServiceStatus = WindowsServiceControl.Describe(state);
+            // L'etat est derive de l'enum, plus d'une comparaison sur un libelle localise.
+            IsRunning = state == WorkerState.Running;
 
-        LiveLog = await Task.Run(TailLog);
-        McpHealthy = await CanConnectAsync(_settings.Config.McpPort);
-        SidecarHealthy =
-            _settings.Config.SemanticEnabled
-            && await CanConnectAsync(_settings.Config.EmbeddingSidecarPort);
+            UpdateEngineStatus();
+
+            var jobs = await Task.Run(LoadJobs);
+            Jobs.Clear();
+            foreach (var j in jobs)
+                Jobs.Add(j);
+
+            var summary = await Task.Run(LoadSummary);
+            if (summary is not null)
+            {
+                PendingCount = summary.Pending;
+                ProcessingCount = summary.Processing;
+                DoneCount = summary.Done;
+                FailedCount = summary.Failed;
+                CurrentFile = string.IsNullOrEmpty(summary.CurrentFile)
+                    ? "—"
+                    : Path.GetFileName(summary.CurrentFile);
+                CurrentElapsed = summary.CurrentStartedAt is { } started
+                    ? FormatDuration(DateTime.UtcNow - started)
+                    : "";
+                LastError = string.IsNullOrEmpty(summary.LastError)
+                    ? ""
+                    : $"{Path.GetFileName(summary.LastErrorFile)} — {summary.LastError}";
+            }
+
+            LiveLog = await Task.Run(TailLog);
+            McpHealthy = await CanConnectAsync(_settings.Config.McpPort);
+            SidecarHealthy =
+                _settings.Config.SemanticEnabled
+                && await CanConnectAsync(_settings.Config.EmbeddingSidecarPort);
+        }
+        catch (Exception ex)
+        {
+            // Un tick ne doit jamais remonter d'exception non observee : on le trace en dernier ressort.
+            Debug.WriteLine("RefreshAsync: " + ex);
+        }
+        finally
+        {
+            _refreshing = false;
+        }
     }
 
     private void UpdateEngineStatus()

@@ -23,12 +23,12 @@ $py = Join-Path $engineDir ".venv\Scripts\python.exe"
 
 & $py -m pip install --upgrade pip
 
-Write-Host "==> Installation de PyTorch (2.2.2, aligne sur la stack pinnee)" -ForegroundColor Cyan
-if ($Cuda) {
-    & $py -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-} else {
-    & $py -m pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-}
+Write-Host "==> Installation de PyTorch (pins de constraints-torch-cpu.txt, aligne sur la stack)" -ForegroundColor Cyan
+# Versions epinglees dans engine\constraints-torch-cpu.txt (torch/torchaudio 2.2.2).
+# Seul l'index change entre CPU et CUDA ; les pins restent centralises dans le fichier.
+$torchConstraints = Join-Path $engineDir "constraints-torch-cpu.txt"
+$torchIndex = if ($Cuda) { "https://download.pytorch.org/whl/cu121" } else { "https://download.pytorch.org/whl/cpu" }
+& $py -m pip install -r $torchConstraints --index-url $torchIndex
 
 Write-Host "==> Installation des dependances du moteur" -ForegroundColor Cyan
 & $py -m pip install -r requirements.txt

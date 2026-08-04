@@ -56,6 +56,12 @@ public sealed partial class GeneralViewModel : ObservableValidator
     private string _language = "auto";
 
     [ObservableProperty]
+    private bool _autoRetryFailedJobs;
+
+    [ObservableProperty]
+    private int _maxAutoRetries = 3;
+
+    [ObservableProperty]
     private bool _diarizationEnabled = true;
 
     [ObservableProperty]
@@ -117,6 +123,8 @@ public sealed partial class GeneralViewModel : ObservableValidator
         WatchRoot = C.WatchRoot;
         OutputRoot = C.OutputRoot;
         ModelCacheDir = C.ModelCacheDir;
+        AutoRetryFailedJobs = C.AutoRetryFailedJobs;
+        MaxAutoRetries = C.MaxAutoRetries;
         ModelSize = C.Engine.ModelSize;
         Device = C.Engine.Device;
         ComputeType = C.Engine.ComputeType;
@@ -139,6 +147,10 @@ public sealed partial class GeneralViewModel : ObservableValidator
     partial void OnOutputRootChanged(string value) => C.OutputRoot = value;
 
     partial void OnModelCacheDirChanged(string value) => C.ModelCacheDir = value;
+
+    partial void OnAutoRetryFailedJobsChanged(bool value) => C.AutoRetryFailedJobs = value;
+
+    partial void OnMaxAutoRetriesChanged(int value) => C.MaxAutoRetries = value < 1 ? 1 : value;
 
     partial void OnModelSizeChanged(string value) => C.Engine.ModelSize = value;
 

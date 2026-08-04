@@ -70,21 +70,23 @@ public sealed class EmbeddingClient
     private static async Task<string> ReadLineAsync(NetworkStream stream, CancellationToken ct)
     {
         var buffer = new byte[4096];
-        var sb = new StringBuilder();
+        // On accumule les octets bruts et on ne decode qu'une seule fois, en UTF-8, une fois la
+        // ligne complete : decoder chunk par chunk pourrait couper un caractere multi-octets a
+        // cheval sur deux lectures. Le byte '\n' (0x0A) n'apparait jamais dans une sequence UTF-8.
+        var bytes = new List<byte>();
         while (true)
         {
             var read = await stream.ReadAsync(buffer, ct);
             if (read == 0)
                 break;
-            var chunk = Encoding.UTF8.GetString(buffer, 0, read);
-            var nl = chunk.IndexOf('\n');
+            var nl = Array.IndexOf(buffer, (byte)'\n', 0, read);
             if (nl >= 0)
             {
-                sb.Append(chunk.AsSpan(0, nl));
+                bytes.AddRange(buffer[..nl]);
                 break;
             }
-            sb.Append(chunk);
+            bytes.AddRange(buffer[..read]);
         }
-        return sb.ToString();
+        return Encoding.UTF8.GetString(bytes.ToArray());
     }
 }

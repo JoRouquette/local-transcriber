@@ -147,7 +147,9 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
 
     # 5. Ecriture des sorties
     os.makedirs(req.output_dir, exist_ok=True)
-    base = os.path.join(req.output_dir, req.base_name)
+    # Defensif : on ne garde que le nom de fichier pour empecher qu'un base_name
+    # du type "..\..\x" ne fasse ecrire hors de output_dir.
+    base = os.path.join(req.output_dir, os.path.basename(req.base_name))
     meta = {
         "source_file": req.audio_path,
         "transcribed_at": _dt.datetime.now().isoformat(timespec="seconds"),

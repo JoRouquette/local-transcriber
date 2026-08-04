@@ -157,6 +157,8 @@ public sealed class Worker : BackgroundService
 
         _dataDir = ConfigStore.ExpandPath(_config.DataDir);
         Directory.CreateDirectory(_dataDir);
+        // Ces stores ouvrent une connexion SQLite par operation (using var c = Open()) et ne
+        // conservent aucun handle persistant : rien a liberer avant de les recreer.
         _jobs = new JobStore(Path.Combine(_dataDir, "jobs.db"));
         _jobs.RequeueStale();
         _commands = new CommandStore(Path.Combine(_dataDir, "commands.db"));
@@ -214,6 +216,18 @@ public sealed class Worker : BackgroundService
         var outputRoot = ConfigStore.ExpandPath(_config.OutputRoot);
         if (!Directory.Exists(watchRoot))
             return;
+
+        // Retry auto configurable : avant le scan, on repasse en Pending les echecs restes sous
+        // le plafond de tentatives. Desactive par defaut (les echecs restent alors en Failed).
+        if (_config.AutoRetryFailedJobs)
+        {
+            var requeued = _jobs.RequeueFailedForRetry(_config.MaxAutoRetries);
+            if (requeued > 0)
+                _logger.LogInformation(
+                    "Retry auto : {Count} fichier(s) en echec re-enfile(s).",
+                    requeued
+                );
+        }
 
         var extensions = new HashSet<string>(_config.FileTypes, StringComparer.OrdinalIgnoreCase);
         var voicesDirNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
