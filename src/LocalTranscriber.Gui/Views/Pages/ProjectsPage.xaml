@@ -14,67 +14,68 @@
     <TextBlock Grid.Row="0" Text="Projets" FontSize="20" FontWeight="Medium" Margin="0,0,0,4" />
     <TextBlock Grid.Row="0" Text="" />
 
-    <DockPanel Grid.Row="1" Margin="0,8,0,12">
-      <Button
-        DockPanel.Dock="Left"
-        Style="{StaticResource MaterialDesignRaisedButton}"
-        Command="{Binding AddProjectCommand}"
-        Margin="0,0,8,0"
-      >
-        <StackPanel Orientation="Horizontal">
-          <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <TextBlock Text="Ajouter" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-      <Button
-        DockPanel.Dock="Left"
-        Style="{StaticResource MaterialDesignOutlinedButton}"
-        Command="{Binding RemoveProjectCommand}"
-      >
-        <StackPanel Orientation="Horizontal">
-          <materialDesign:PackIcon
-            Kind="TrashCanOutline"
-            VerticalAlignment="Center"
-            Margin="0,0,6,0"
-          />
-          <TextBlock Text="Supprimer" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-      <Button
-        DockPanel.Dock="Left"
-        Style="{StaticResource MaterialDesignFlatButton}"
-        Command="{Binding ReprocessProjectCommand}"
-        Margin="8,0,0,0"
-        ToolTip="Re-mettre en file tous les audios du projet sélectionné"
-      >
-        <StackPanel Orientation="Horizontal">
-          <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
-          <TextBlock Text="(Re)traiter" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
-      <Button
-        DockPanel.Dock="Left"
-        Style="{StaticResource MaterialDesignFlatButton}"
-        Command="{Binding RefreshProjectsCommand}"
-        Margin="8,0,0,0"
-        ToolTip="Détecter les nouveaux sous-dossiers du dossier surveillé (ajoutés comme projets inactifs)"
-      >
-        <StackPanel Orientation="Horizontal">
-          <materialDesign:PackIcon
-            Kind="FolderSearchOutline"
-            VerticalAlignment="Center"
-            Margin="0,0,6,0"
-          />
-          <TextBlock Text="Découvrir" VerticalAlignment="Center" />
-        </StackPanel>
-      </Button>
+    <StackPanel Grid.Row="1" Margin="0,8,0,12">
+      <!-- Barre d'outils : les boutons passent à la ligne si la largeur manque -->
+      <WrapPanel>
+        <Button
+          Style="{StaticResource MaterialDesignRaisedButton}"
+          Command="{Binding AddProjectCommand}"
+          Margin="0,0,8,8"
+        >
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="Plus" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBlock Text="Ajouter" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button
+          Style="{StaticResource MaterialDesignOutlinedButton}"
+          Command="{Binding RemoveProjectCommand}"
+          Margin="0,0,8,8"
+        >
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon
+              Kind="TrashCanOutline"
+              VerticalAlignment="Center"
+              Margin="0,0,6,0"
+            />
+            <TextBlock Text="Supprimer" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button
+          Style="{StaticResource MaterialDesignFlatButton}"
+          Command="{Binding ReprocessProjectCommand}"
+          Margin="0,0,8,8"
+          ToolTip="Re-mettre en file tous les audios du projet sélectionné"
+        >
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBlock Text="(Re)traiter" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button
+          Style="{StaticResource MaterialDesignFlatButton}"
+          Command="{Binding RefreshProjectsCommand}"
+          Margin="0,0,8,8"
+          ToolTip="Détecter les nouveaux sous-dossiers du dossier surveillé (ajoutés comme projets inactifs)"
+        >
+          <StackPanel Orientation="Horizontal">
+            <materialDesign:PackIcon
+              Kind="FolderSearchOutline"
+              VerticalAlignment="Center"
+              Margin="0,0,6,0"
+            />
+            <TextBlock Text="Découvrir" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </WrapPanel>
       <TextBlock
         Text="Sous-dossiers du dossier surveillé. Les nouveaux dossiers apparaissent comme projets inactifs."
+        TextWrapping="Wrap"
         VerticalAlignment="Center"
-        Margin="16,0,0,0"
+        Margin="0,4,0,0"
         Foreground="{DynamicResource MaterialDesignBodyLight}"
       />
-    </DockPanel>
+    </StackPanel>
 
     <materialDesign:Card Grid.Row="2" materialDesign:ElevationAssist.Elevation="Dp2">
       <DataGrid

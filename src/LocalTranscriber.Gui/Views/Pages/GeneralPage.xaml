@@ -81,36 +81,45 @@
             FontWeight="Medium"
             Margin="0,0,0,12"
           />
-          <UniformGrid Columns="2">
+          <!-- Combos adaptatifs : 2 par ligne en large, 1 par ligne en étroit -->
+          <WrapPanel>
             <ComboBox
               Style="{StaticResource MaterialDesignFloatingHintComboBox}"
               materialDesign:HintAssist.Hint="Modèle"
-              Margin="0,0,8,12"
+              MinWidth="240"
+              Width="260"
+              Margin="0,0,12,12"
               ItemsSource="{Binding ModelSizes}"
               SelectedItem="{Binding ModelSize}"
             />
             <ComboBox
               Style="{StaticResource MaterialDesignFloatingHintComboBox}"
               materialDesign:HintAssist.Hint="Périphérique"
-              Margin="8,0,0,12"
+              MinWidth="240"
+              Width="260"
+              Margin="0,0,12,12"
               ItemsSource="{Binding Devices}"
               SelectedItem="{Binding Device}"
             />
             <ComboBox
               Style="{StaticResource MaterialDesignFloatingHintComboBox}"
               materialDesign:HintAssist.Hint="Type de calcul"
-              Margin="0,0,8,0"
+              MinWidth="240"
+              Width="260"
+              Margin="0,0,12,12"
               ItemsSource="{Binding ComputeTypes}"
               SelectedItem="{Binding ComputeType}"
             />
             <ComboBox
               Style="{StaticResource MaterialDesignFloatingHintComboBox}"
               materialDesign:HintAssist.Hint="Langue"
-              Margin="8,0,0,0"
+              MinWidth="240"
+              Width="260"
+              Margin="0,0,12,12"
               ItemsSource="{Binding Languages}"
               SelectedItem="{Binding Language}"
             />
-          </UniformGrid>
+          </WrapPanel>
         </StackPanel>
       </materialDesign:Card>
 

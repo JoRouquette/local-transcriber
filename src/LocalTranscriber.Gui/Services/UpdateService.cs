@@ -4,6 +4,8 @@ using Velopack.Sources;
 
 namespace LocalTranscriber.Gui.Services;
 
+// WindowsServiceControl vit dans le namespace racine LocalTranscriber.Gui.
+
 /// <summary>
 /// Encapsule l'auto-update Velopack : interroge les releases GitHub, télécharge le
 /// paquet et l'applique (au redémarrage immédiat ou à la prochaine fermeture).
@@ -48,17 +50,37 @@ public sealed class UpdateService
         return info.TargetFullRelease.Version.ToString();
     }
 
+    /// <summary>Vrai si une mise à jour s'appliquera après la fermeture (voir <see cref="ApplyOnExit"/>).</summary>
+    public bool ApplyScheduledOnExit { get; private set; }
+
     /// <summary>Applique la mise à jour téléchargée et redémarre immédiatement l'application.</summary>
     public void ApplyAndRestart()
     {
-        if (_pending is not null)
-            _mgr.ApplyUpdatesAndRestart(_pending);
+        if (_pending is null)
+            return;
+        // Velopack remplace le dossier `current\` ; le worker de fond tourne depuis ce meme
+        // dossier et le verrouille. On l'arrete avant d'appliquer — la GUI relancee le redemarre.
+        WindowsServiceControl.Stop();
+        _mgr.ApplyUpdatesAndRestart(_pending);
     }
 
     /// <summary>Programme l'installation de la mise à jour à la prochaine fermeture (non intrusif).</summary>
     public void ApplyOnExit()
     {
-        if (_pending is not null)
-            _mgr.WaitExitThenApplyUpdates(_pending);
+        if (_pending is null)
+            return;
+        _mgr.WaitExitThenApplyUpdates(_pending);
+        ApplyScheduledOnExit = true;
+    }
+
+    /// <summary>
+    /// À appeler à la fermeture de l'application. Si une mise à jour s'appliquera après la sortie
+    /// du processus (<see cref="ApplyOnExit"/>), on arrête le worker de fond pour libérer `current\`,
+    /// sans quoi le remplacement Velopack échoue (fichiers verrouillés).
+    /// </summary>
+    public void OnAppExit()
+    {
+        if (ApplyScheduledOnExit)
+            WindowsServiceControl.Stop();
     }
 }

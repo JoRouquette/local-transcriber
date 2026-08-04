@@ -1,11 +1,15 @@
 using System.ComponentModel;
 using System.Windows;
 using LocalTranscriber.Gui;
+using LocalTranscriber.Gui.ViewModels;
 
 namespace LocalTranscriber.Gui.Views;
 
 public partial class MainWindow : Window
 {
+    // En dessous de cette largeur de fenêtre, le rail de navigation se réduit à ses icônes.
+    private const double RailCollapseThreshold = 1000;
+
     private bool _reallyClose;
 
     public MainWindow()
@@ -13,6 +17,17 @@ public partial class MainWindow : Window
         InitializeComponent();
         StateChanged += OnStateChanged;
         Closing += OnClosing;
+    }
+
+    /// <summary>Réduit le rail de navigation (icônes seules) quand la fenêtre devient étroite.</summary>
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (!e.WidthChanged)
+            return;
+        var collapsed = ActualWidth < RailCollapseThreshold;
+        NavColumn.Width = new GridLength(collapsed ? 64 : 224);
+        if (DataContext is ShellViewModel vm)
+            vm.IsRailCollapsed = collapsed;
     }
 
     private void OnStateChanged(object? sender, EventArgs e)
