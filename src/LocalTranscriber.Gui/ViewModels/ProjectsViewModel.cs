@@ -125,5 +125,99 @@ public sealed partial class ProjectsViewModel : ObservableObject
     {
         RemoveProjectCommand.NotifyCanExecuteChanged();
         ReprocessProjectCommand.NotifyCanExecuteChanged();
+        LoadProjectSettings(value);
+    }
+
+    // ==== Réglages spécifiques au projet sélectionné (diarisation + identification) ====
+    // Le backend fusionne déjà « projet sinon global » via AppConfig.EffectiveFor ; ici on
+    // édite les surcharges ProjectConfig.Diarization / .SpeakerIdentification.
+
+    private bool _loadingProject;
+
+    [ObservableProperty]
+    private bool _hasSelectedProject;
+
+    /// <summary>Le projet a des réglages propres (sinon il hérite du global).</summary>
+    [ObservableProperty]
+    private bool _projectHasSpecific;
+
+    [ObservableProperty]
+    private bool _projectDiarization = true;
+
+    [ObservableProperty]
+    private int _projectSpeakerCount;
+
+    [ObservableProperty]
+    private bool _projectSpeakerId;
+
+    [ObservableProperty]
+    private double _projectThreshold = 0.55;
+
+    private void LoadProjectSettings(ProjectConfig? p)
+    {
+        _loadingProject = true;
+        HasSelectedProject = p is not null;
+        if (p is not null)
+        {
+            var g = _settings.Config;
+            ProjectHasSpecific = p.Diarization is not null || p.SpeakerIdentification is not null;
+            var diar = p.Diarization ?? g.Diarization;
+            var sid = p.SpeakerIdentification ?? g.SpeakerIdentification;
+            ProjectDiarization = diar.Enabled;
+            ProjectSpeakerCount =
+                diar.MinSpeakers.HasValue && diar.MinSpeakers == diar.MaxSpeakers
+                    ? diar.MinSpeakers.Value
+                    : 0;
+            ProjectSpeakerId = sid.Enabled;
+            ProjectThreshold = sid.Threshold;
+        }
+        _loadingProject = false;
+    }
+
+    partial void OnProjectHasSpecificChanged(bool value)
+    {
+        if (_loadingProject || SelectedProject is null)
+            return;
+        if (value)
+        {
+            PersistProjectSettings();
+        }
+        else
+        {
+            SelectedProject.Diarization = null;
+            SelectedProject.SpeakerIdentification = null;
+            _settings.Save();
+            LoadProjectSettings(SelectedProject); // réaffiche les valeurs globales héritées
+        }
+    }
+
+    partial void OnProjectDiarizationChanged(bool value) => PersistProjectSettings();
+
+    partial void OnProjectSpeakerCountChanged(int value) => PersistProjectSettings();
+
+    partial void OnProjectSpeakerIdChanged(bool value) => PersistProjectSettings();
+
+    partial void OnProjectThresholdChanged(double value) => PersistProjectSettings();
+
+    /// <summary>Écrit les surcharges du projet sélectionné dans la config, puis sauvegarde.</summary>
+    private void PersistProjectSettings()
+    {
+        if (_loadingProject || SelectedProject is null || !ProjectHasSpecific)
+            return;
+        var g = _settings.Config;
+        int? spk = ProjectSpeakerCount > 0 ? ProjectSpeakerCount : null;
+        SelectedProject.Diarization = new DiarizationConfig
+        {
+            Enabled = ProjectDiarization,
+            MinSpeakers = spk,
+            MaxSpeakers = spk,
+        };
+        SelectedProject.SpeakerIdentification = new SpeakerIdConfig
+        {
+            Enabled = ProjectSpeakerId,
+            Threshold = ProjectThreshold,
+            VoicesDirName = g.SpeakerIdentification.VoicesDirName,
+        };
+        _settings.Save();
     }
 }
