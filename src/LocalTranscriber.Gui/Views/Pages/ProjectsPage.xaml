@@ -4,11 +4,15 @@
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
   xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
 >
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </UserControl.Resources>
   <Grid Margin="24">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
     <TextBlock Grid.Row="0" Text="Projets" FontSize="20" FontWeight="Medium" Margin="0,0,0,4" />
@@ -95,6 +99,83 @@
           <DataGridCheckBoxColumn Header="Actif" Binding="{Binding Enabled}" Width="Auto" />
         </DataGrid.Columns>
       </DataGrid>
+    </materialDesign:Card>
+
+    <!-- Réglages spécifiques au projet sélectionné (surcharge du global) -->
+    <materialDesign:Card
+      Grid.Row="3"
+      Padding="16,12"
+      Margin="0,12,0,0"
+      materialDesign:ElevationAssist.Elevation="Dp2"
+      Visibility="{Binding HasSelectedProject, Converter={StaticResource BoolToVis}}"
+    >
+      <StackPanel>
+        <TextBlock Text="Réglages du projet sélectionné" FontWeight="Medium" Margin="0,0,0,8" />
+        <CheckBox
+          Content="Réglages spécifiques à ce projet (sinon hérite du global)"
+          IsChecked="{Binding ProjectHasSpecific}"
+        />
+        <StackPanel Margin="0,8,0,0" IsEnabled="{Binding ProjectHasSpecific}">
+          <DockPanel LastChildFill="False" Margin="0,4">
+            <ToggleButton
+              DockPanel.Dock="Right"
+              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+              Foreground="{DynamicResource PrimaryHueMidBrush}"
+              IsChecked="{Binding ProjectDiarization}"
+            />
+            <TextBlock
+              DockPanel.Dock="Left"
+              VerticalAlignment="Center"
+              Text="Diarisation (qui parle quand)"
+            />
+          </DockPanel>
+          <DockPanel LastChildFill="False" Margin="0,4">
+            <ToggleButton
+              DockPanel.Dock="Right"
+              Style="{StaticResource MaterialDesignSwitchToggleButton}"
+              Foreground="{DynamicResource PrimaryHueMidBrush}"
+              IsChecked="{Binding ProjectSpeakerId}"
+            />
+            <TextBlock
+              DockPanel.Dock="Left"
+              VerticalAlignment="Center"
+              Text="Identifier les locuteurs (snippets de voix)"
+            />
+          </DockPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <TextBlock Text="Nombre de locuteurs" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox
+              Width="80"
+              materialDesign:HintAssist.Hint="0 = auto"
+              Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+              Text="{Binding ProjectSpeakerCount, UpdateSourceTrigger=PropertyChanged}"
+            />
+            <TextBlock
+              Text="(0 = auto : déduit du dossier voices si présent)"
+              VerticalAlignment="Center"
+              Margin="12,0,0,0"
+              FontSize="11"
+              Foreground="{DynamicResource MaterialDesignBodyLight}"
+            />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <TextBlock Text="Seuil de similarité" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <Slider
+              Width="200"
+              Minimum="0.3"
+              Maximum="0.9"
+              TickFrequency="0.05"
+              Value="{Binding ProjectThreshold}"
+              VerticalAlignment="Center"
+            />
+            <TextBlock
+              Text="{Binding ProjectThreshold, StringFormat=N2}"
+              VerticalAlignment="Center"
+              Margin="12,0,0,0"
+            />
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
     </materialDesign:Card>
   </Grid>
 </UserControl>

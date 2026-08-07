@@ -70,6 +70,10 @@ public sealed partial class GeneralViewModel : ObservableValidator
     [ObservableProperty]
     private double _speakerThreshold = 0.55;
 
+    /// <summary>Nombre de locuteurs attendu (0 = auto). Force min = max quand &gt; 0.</summary>
+    [ObservableProperty]
+    private int _speakerCount;
+
     [ObservableProperty]
     [NotifyDataErrorInfo]
     [CustomValidation(typeof(GeneralViewModel), nameof(ValidateToken))]
@@ -130,6 +134,11 @@ public sealed partial class GeneralViewModel : ObservableValidator
         ComputeType = C.Engine.ComputeType;
         Language = C.Engine.Language;
         DiarizationEnabled = C.Diarization.Enabled;
+        SpeakerCount =
+            C.Diarization.MinSpeakers.HasValue
+            && C.Diarization.MinSpeakers == C.Diarization.MaxSpeakers
+                ? C.Diarization.MinSpeakers.Value
+                : 0;
         SpeakerIdEnabled = C.SpeakerIdentification.Enabled;
         SpeakerThreshold = C.SpeakerIdentification.Threshold;
         HfToken = C.HfToken ?? "";
@@ -161,6 +170,20 @@ public sealed partial class GeneralViewModel : ObservableValidator
     partial void OnLanguageChanged(string value) => C.Engine.Language = value;
 
     partial void OnDiarizationEnabledChanged(bool value) => C.Diarization.Enabled = value;
+
+    partial void OnSpeakerCountChanged(int value)
+    {
+        if (value <= 0)
+        {
+            C.Diarization.MinSpeakers = null;
+            C.Diarization.MaxSpeakers = null;
+        }
+        else
+        {
+            C.Diarization.MinSpeakers = value;
+            C.Diarization.MaxSpeakers = value;
+        }
+    }
 
     partial void OnSpeakerIdEnabledChanged(bool value) => C.SpeakerIdentification.Enabled = value;
 

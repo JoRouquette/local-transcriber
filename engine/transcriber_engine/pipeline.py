@@ -106,10 +106,21 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
 
     # 3. Diarisation
     if req.diarization_enabled:
+        min_spk, max_spk = req.min_speakers, req.max_speakers
+        # Si aucun nombre n'est fixe et que des voix de reference existent, on deduit le
+        # nombre de locuteurs du dossier voices/ (evite la sur-segmentation de pyannote).
+        if min_spk is None and max_spk is None and req.speaker_id_enabled and req.voices_dir:
+            import sys as _sys
+
+            from .speaker_id import count_reference_voices
+
+            k = count_reference_voices(req.voices_dir)
+            if k > 0:
+                min_spk = max_spk = k
+                print(f"[engine] {k} locuteur(s) deduit(s) du dossier voices/", file=_sys.stderr, flush=True)
+
         diarize = _load_diarization_pipeline(hf_token, device)
-        diarize_segments = diarize(
-            audio, min_speakers=req.min_speakers, max_speakers=req.max_speakers
-        )
+        diarize_segments = diarize(audio, min_speakers=min_spk, max_speakers=max_spk)
         tr = whisperx.assign_word_speakers(diarize_segments, tr)
 
     segments = _normalize_segments(tr.get("segments", []))

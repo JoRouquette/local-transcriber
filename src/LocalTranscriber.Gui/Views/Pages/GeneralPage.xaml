@@ -157,11 +157,7 @@
             Margin="0,8,0,0"
             IsEnabled="{Binding AutoRetryFailedJobs}"
           >
-            <TextBlock
-              Text="Tentatives maximum"
-              VerticalAlignment="Center"
-              Margin="0,0,12,0"
-            />
+            <TextBlock Text="Tentatives maximum" VerticalAlignment="Center" Margin="0,0,12,0" />
             <TextBox
               Width="72"
               Style="{StaticResource MaterialDesignTextBox}"
@@ -238,6 +234,23 @@
               Text="Identifier les locuteurs (snippets de voix)"
             />
           </DockPanel>
+
+          <StackPanel Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
+            <TextBlock Text="Nombre de locuteurs" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox
+              Width="80"
+              materialDesign:HintAssist.Hint="0 = auto"
+              Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+              Text="{Binding SpeakerCount, UpdateSourceTrigger=PropertyChanged}"
+            />
+            <TextBlock
+              Text="(0 = auto : déduit du dossier voices si présent, sinon détection ; une valeur force ce nombre exact)"
+              VerticalAlignment="Center"
+              Margin="12,0,0,0"
+              FontSize="11"
+              Foreground="{DynamicResource MaterialDesignBodyLight}"
+            />
+          </StackPanel>
 
           <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
             <TextBlock Text="Seuil de similarité" VerticalAlignment="Center" Margin="0,0,12,0" />
