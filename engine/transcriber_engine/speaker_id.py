@@ -187,22 +187,57 @@ class SpeakerIdentifier:
             _log(f"[engine] identification : audio source illisible : {e}")
             return result
 
+        # Embedding moyen par cluster diarise (on ignore le bucket "SPEAKER_?" = mots non attribues).
+        clusters: dict[str, np.ndarray] = {}
         for label, spans in speaker_segments.items():
+            if label == "SPEAKER_?":
+                continue
             spans_sorted = sorted(spans, key=lambda s: s[1] - s[0], reverse=True)[:5]
             embeddings = [
                 e for s, e2 in spans_sorted if (e := self._embed_crop(main, s, e2)) is not None
             ]
-            if not embeddings:
-                continue
-            cluster = np.mean(np.vstack(embeddings), axis=0)
+            if embeddings:
+                clusters[label] = np.mean(np.vstack(embeddings), axis=0)
+        if not clusters:
+            return result
 
-            best_name, best_score = None, -1.0
-            for name, ref in self._references.items():
-                score = _cosine(cluster, ref)
-                if score > best_score:
-                    best_name, best_score = name, score
+        labels = list(clusters.keys())
+        ref_names = list(self._references.keys())
+        # Matrice de similarite cosinus [clusters x voix de reference].
+        scores = np.array(
+            [[_cosine(clusters[lbl], self._references[rn]) for rn in ref_names] for lbl in labels]
+        )
 
-            if best_name is not None and best_score >= threshold:
-                result[label] = (best_name, best_score)
+        if len(labels) <= len(ref_names):
+            # On connait les locuteurs (autant ou moins de clusters que de voix) : appariement
+            # optimal 1:1 (chaque cluster recoit sa voix la plus proche, globalement), SANS seuil
+            # — on nomme tout le monde. Hongrois si scipy dispo, sinon glouton.
+            try:
+                from scipy.optimize import linear_sum_assignment
+
+                rows, cols = linear_sum_assignment(-scores)
+                pairs = list(zip(rows.tolist(), cols.tolist()))
+            except Exception:  # noqa: BLE001
+                pairs, used = [], set()
+                order = sorted(
+                    ((scores[i, j], i, j) for i in range(len(labels)) for j in range(len(ref_names))),
+                    reverse=True,
+                )
+                taken_lbl: set[int] = set()
+                for _s, i, j in order:
+                    if i in taken_lbl or j in used:
+                        continue
+                    pairs.append((i, j))
+                    taken_lbl.add(i)
+                    used.add(j)
+            for i, j in pairs:
+                result[labels[i]] = (ref_names[j], float(scores[i, j]))
+        else:
+            # Plus de clusters que de voix connues (invite non enrole) : argmax + seuil,
+            # les clusters sous le seuil restent anonymes.
+            for i, lbl in enumerate(labels):
+                j = int(np.argmax(scores[i]))
+                if scores[i, j] >= threshold:
+                    result[lbl] = (ref_names[j], float(scores[i, j]))
 
         return result
