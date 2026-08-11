@@ -567,6 +567,7 @@ public sealed class Worker : BackgroundService
             ChunkThresholdMinutes = _config.Chunking.ThresholdMinutes,
             ChunkMinutes = _config.Chunking.ChunkMinutes,
             ChunkMinSilenceSeconds = _config.Chunking.MinSilenceSeconds,
+            MaxAudioMinutes = _config.MaxAudioMinutes,
         };
     }
 }

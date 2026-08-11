@@ -49,4 +49,7 @@ public sealed class EngineRequest
     public int ChunkThresholdMinutes { get; set; } = 20;
     public int ChunkMinutes { get; set; } = 10;
     public double ChunkMinSilenceSeconds { get; set; } = 0.5;
+
+    /// <summary>Garde-fou memoire : duree audio max acceptee (min). 0 = desactive.</summary>
+    public int MaxAudioMinutes { get; set; } = 480;
 }

@@ -32,6 +32,8 @@ class EngineRequest:
     chunk_threshold_minutes: int = 20
     chunk_minutes: int = 10
     chunk_min_silence_seconds: float = 0.5
+    # Garde-fou memoire : duree audio max acceptee (min). 0 = desactive.
+    max_audio_minutes: int = 480
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "EngineRequest":

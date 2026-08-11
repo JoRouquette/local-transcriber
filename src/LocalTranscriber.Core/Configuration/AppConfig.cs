@@ -132,6 +132,15 @@ public sealed class AppConfig
     public int EngineInactivityTimeoutMinutes { get; set; } = 20;
 
     /// <summary>
+    /// Garde-fou memoire : au-dela de cette duree audio, le fichier est refuse d'emblee (avant tout
+    /// chargement complet en RAM) avec un message clair, plutot que de risquer un OOM. Verifie via
+    /// une sonde de duree legere cote moteur. 0 = desactive. Defaut 480 min (8 h) : couvre tout
+    /// enregistrement de reunion normal, ne bloque que les cas pathologiques (fichier corrompu a
+    /// duree aberrante, enregistrement de plusieurs jours laisse ouvert).
+    /// </summary>
+    public int MaxAudioMinutes { get; set; } = 480;
+
+    /// <summary>
     /// Retente automatiquement les fichiers en echec au prochain scan, tant que leur nombre de
     /// tentatives reste sous <see cref="MaxAutoRetries"/>. Desactive par defaut : sinon les echecs
     /// restent en Failed (retraitement manuel via le bouton Retraiter).

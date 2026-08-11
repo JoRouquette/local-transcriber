@@ -10,6 +10,22 @@ from .device import resolve_compute_type, resolve_device
 from .models import EngineRequest, EngineResult, SpeakerInfo
 
 
+def _probe_duration_seconds(path: str) -> Optional[float]:
+    """Sonde legere de la duree audio (lecture d'en-tete via PyAV, sans decoder tout le flux)."""
+    try:
+        import av  # dependance de faster-whisper
+
+        with av.open(path) as container:
+            if container.duration is not None:
+                return float(container.duration) / 1_000_000.0  # AV_TIME_BASE = 1e6 us
+            for stream in container.streams:
+                if stream.duration is not None and stream.time_base is not None:
+                    return float(stream.duration * stream.time_base)
+    except Exception:
+        return None
+    return None
+
+
 def _load_diarization_pipeline(hf_token: Optional[str], device: str):
     """Charge le pipeline de diarisation en tolerant les evolutions d'API de whisperx."""
     import torch
@@ -28,6 +44,20 @@ def _load_diarization_pipeline(hf_token: Optional[str], device: str):
             "Diarisation indisponible : token Hugging Face invalide ou conditions non acceptees. "
             "Acceptez-les (une fois) sur https://hf.co/pyannote/speaker-diarization-3.1 et "
             "https://hf.co/pyannote/segmentation-3.0, puis reessayez."
+        ) from e
+    except Exception as e:  # noqa: BLE001
+        # On distingue un echec reseau (telechargement du modele pyannote) d'un autre echec
+        # de chargement, pour un message actionnable cote utilisateur.
+        msg = str(e).lower()
+        network = ("connection", "timed out", "timeout", "network", "resolve", "getaddr",
+                   "temporarily", "ssl", "max retries", "connexion")
+        if any(tok in msg for tok in network):
+            raise RuntimeError(
+                "Diarisation indisponible : echec reseau lors du telechargement du modele "
+                "pyannote. Verifiez la connexion internet, puis reessayez."
+            ) from e
+        raise RuntimeError(
+            f"Diarisation indisponible : echec du chargement du modele pyannote ({e})."
         ) from e
 
 
@@ -65,7 +95,29 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     cache = req.model_cache_dir or None
 
     # 1. Transcription
-    audio = whisperx.load_audio(req.audio_path)
+    # Garde-fou memoire : on refuse d'emblee un fichier trop long AVANT de charger tout l'audio
+    # en RAM (whisperx.load_audio decode le flux entier en float32 16 kHz), via une sonde legere.
+    max_minutes = getattr(req, "max_audio_minutes", 0) or 0
+    if max_minutes > 0:
+        probed = _probe_duration_seconds(req.audio_path)
+        if probed is not None and probed > max_minutes * 60.0:
+            result.status = "error"
+            result.duration_seconds = probed
+            result.error = (
+                f"Fichier trop long ({probed / 60:.0f} min > limite {max_minutes} min). "
+                "Augmentez max_audio_minutes ou decoupez le fichier."
+            )
+            return result
+
+    try:
+        audio = whisperx.load_audio(req.audio_path)
+    except Exception as e:  # noqa: BLE001
+        result.status = "error"
+        result.error = (
+            f"Fichier audio illisible ou format non supporte : "
+            f"{os.path.basename(req.audio_path)} ({e})"
+        )
+        return result
     duration = len(audio) / 16000.0
     lang = None if req.language == "auto" else req.language
     model = whisperx.load_model(

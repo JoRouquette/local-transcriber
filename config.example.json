@@ -11,6 +11,7 @@
   "stabilization_seconds": 5,
   "max_parallel_jobs": 1,
   "engine_inactivity_timeout_minutes": 20,
+  "max_audio_minutes": 480,
   "mcp_port": 8765,
   "semantic_enabled": true,
   "embedding_sidecar_port": 8766,
