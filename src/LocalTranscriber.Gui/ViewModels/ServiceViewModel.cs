@@ -61,6 +61,33 @@ public sealed partial class ServiceViewModel : ObservableObject
     [ObservableProperty]
     private bool _isRunning;
 
+    /// <summary>État métier du worker : pilote la visibilité des boutons selon la situation réelle.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotInstalled))]
+    [NotifyPropertyChangedFor(nameof(IsStopped))]
+    [NotifyPropertyChangedFor(nameof(IsRunningState))]
+    [NotifyCanExecuteChangedFor(nameof(InstallServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RestartServiceCommand))]
+    private WorkerState _workerState = WorkerState.Error;
+
+    /// <summary>Vrai pendant une transition (démarrage/arrêt/redémarrage) : gèle les boutons.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopServiceCommand))]
+    [NotifyCanExecuteChangedFor(nameof(RestartServiceCommand))]
+    private bool _isBusy;
+
+    /// <summary>Libellé de la transition en cours (« Démarrage… », « Arrêt… », « Redémarrage… »).</summary>
+    [ObservableProperty]
+    private string _workerBusyLabel = "";
+
+    public bool IsNotInstalled => WorkerState == WorkerState.NotInstalled;
+    public bool IsStopped => WorkerState == WorkerState.Stopped;
+    public bool IsRunningState => WorkerState == WorkerState.Running;
+
     [ObservableProperty]
     private TranscriptionJob? _selectedJob;
 
@@ -249,36 +276,89 @@ public sealed partial class ServiceViewModel : ObservableObject
 
     // ================= Worker : cycle de vie =================
 
-    [RelayCommand]
-    private async Task InstallService() =>
-        await RunAsync(
+    private bool CanInstall => !IsBusy && WorkerState == WorkerState.NotInstalled;
+    private bool CanStart => !IsBusy && WorkerState == WorkerState.Stopped;
+    private bool CanStop => !IsBusy && WorkerState == WorkerState.Running;
+    private bool CanRestart => !IsBusy && WorkerState == WorkerState.Running;
+
+    [RelayCommand(CanExecute = nameof(CanInstall))]
+    private Task InstallService() =>
+        RunWorkerAsync(
             WindowsServiceControl.Install,
-            "Activation du worker en arrière-plan (session utilisateur)…"
+            "Activation du worker en arrière-plan…",
+            "Installation…",
+            "Worker installé et démarré.",
+            "L'installation du worker a échoué."
         );
 
-    [RelayCommand]
-    private async Task StartService() =>
-        await RunAsync(WindowsServiceControl.Start, "Démarrage du worker…");
+    [RelayCommand(CanExecute = nameof(CanStart))]
+    private Task StartService() =>
+        RunWorkerAsync(
+            WindowsServiceControl.Start,
+            "Démarrage du worker…",
+            "Démarrage…",
+            "Worker démarré.",
+            "Le worker n'a pas démarré (voir le journal)."
+        );
 
-    [RelayCommand]
-    private async Task StopService() =>
-        await RunAsync(WindowsServiceControl.Stop, "Arrêt du worker…");
+    [RelayCommand(CanExecute = nameof(CanStop))]
+    private Task StopService() =>
+        RunWorkerAsync(
+            WindowsServiceControl.Stop,
+            "Arrêt du worker…",
+            "Arrêt…",
+            "Worker arrêté.",
+            "Le worker ne s'est pas arrêté."
+        );
+
+    [RelayCommand(CanExecute = nameof(CanRestart))]
+    private Task RestartService() =>
+        RunWorkerAsync(
+            WindowsServiceControl.Restart,
+            "Redémarrage du worker…",
+            "Redémarrage…",
+            "Worker redémarré.",
+            "Le redémarrage a échoué."
+        );
 
     [RelayCommand]
     private async Task Refresh() => await RefreshAsync();
 
-    private async Task RunAsync(Action action, string message)
+    /// <summary>
+    /// Exécute une action de cycle de vie du worker en VÉRIFIANT le résultat. L'action bloque
+    /// jusqu'à ce que l'état cible soit atteint (ou timeout) et renvoie un booléen : on affiche
+    /// donc un retour honnête au lieu d'un message optimiste. Le timer d'auto-refresh est mis en
+    /// pause le temps de la transition pour ne pas afficher d'état intermédiaire trompeur.
+    /// </summary>
+    private async Task RunWorkerAsync(
+        Func<bool> action,
+        string startMessage,
+        string busyLabel,
+        string okMessage,
+        string failMessage
+    )
     {
+        if (IsBusy)
+            return;
+        IsBusy = true;
+        WorkerBusyLabel = busyLabel;
+        _timer.Stop();
+        _snackbar.Enqueue(startMessage);
         try
         {
-            _snackbar.Enqueue(message);
-            await Task.Run(action);
-            await Task.Delay(1500);
-            await RefreshAsync();
+            var reached = await Task.Run(action);
+            _snackbar.Enqueue(reached ? okMessage : failMessage);
         }
         catch (Exception ex)
         {
             _snackbar.Enqueue("Erreur : " + ex.Message);
+        }
+        finally
+        {
+            WorkerBusyLabel = "";
+            IsBusy = false;
+            await RefreshAsync();
+            _timer.Start();
         }
     }
 
@@ -286,15 +366,17 @@ public sealed partial class ServiceViewModel : ObservableObject
 
     public async Task RefreshAsync()
     {
-        // Un rafraichissement deja en cours : on saute ce tick pour eviter le chevauchement.
-        if (_refreshing)
+        // Un rafraichissement deja en cours, ou une transition worker en cours : on saute ce tick
+        // pour eviter le chevauchement et l'affichage d'un etat intermediaire trompeur.
+        if (_refreshing || IsBusy)
             return;
         _refreshing = true;
         try
         {
             var state = await Task.Run(WindowsServiceControl.QueryState);
             ServiceStatus = WindowsServiceControl.Describe(state);
-            // L'etat est derive de l'enum, plus d'une comparaison sur un libelle localise.
+            // L'etat pilote a la fois l'affichage et le gating des boutons (via WorkerState).
+            WorkerState = state;
             IsRunning = state == WorkerState.Running;
 
             UpdateEngineStatus();

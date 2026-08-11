@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
 
 namespace LocalTranscriber.Gui;
 
@@ -38,8 +39,8 @@ public static class WindowsServiceControl
         return File.Exists(candidate) ? candidate : null;
     }
 
-    /// <summary>Cree (ou remplace) la tache planifiee et la demarre immediatement.</summary>
-    public static void Install()
+    /// <summary>Cree (ou remplace) la tache planifiee et la demarre. Retourne vrai si le worker tourne.</summary>
+    public static bool Install()
     {
         var exe =
             ServiceExePath
@@ -56,14 +57,71 @@ public static class WindowsServiceControl
         catch
         { /* sans importance */
         }
-        Start();
+        return Start();
     }
 
-    /// <summary>Lance la tache maintenant (sans attendre la prochaine ouverture de session).</summary>
-    public static void Start() => Run("schtasks.exe", $"/Run /TN \"{TaskName}\"");
+    // Delais d'attente : on VERIFIE l'etat cible plutot que de supposer un temps fixe. C'est la
+    // cle contre le cote « aleatoire » : le process peut mettre plus ou moins de temps a
+    // apparaitre/disparaitre selon la charge et le sidecar Python.
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan StopTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>Arrete le worker et son sous-processus (sidecar Python) — arbre complet.</summary>
-    public static void Stop() => Run("taskkill.exe", "/F /T /IM LocalTranscriber.Service.exe");
+    /// <summary>
+    /// Lance la tache et ATTEND que le worker soit reellement en cours (poll, timeout). Si le
+    /// planificateur refuse le demarrage parce qu'une instance residuelle est encore « en cours »
+    /// (policy IgnoreNew), on force un /End puis on retente une fois. Retourne l'etat atteint.
+    /// </summary>
+    public static bool Start()
+    {
+        Run("schtasks.exe", $"/Run /TN \"{TaskName}\"");
+        if (WaitForState(s => s == WorkerState.Running, StartTimeout))
+            return true;
+
+        // Retry : on nettoie l'etat cote planificateur puis on relance.
+        Run("schtasks.exe", $"/End /TN \"{TaskName}\"");
+        Thread.Sleep(500);
+        Run("schtasks.exe", $"/Run /TN \"{TaskName}\"");
+        return WaitForState(s => s == WorkerState.Running, StartTimeout);
+    }
+
+    /// <summary>
+    /// Arrete le worker et son arbre de process (sidecar Python), puis ATTEND la disparition
+    /// effective. On termine d'abord la tache cote planificateur (/End) pour liberer son etat
+    /// d'instance — sinon un Start immediat serait ignore (IgnoreNew) — avant le taskkill /T qui
+    /// garantit la mort de l'arbre complet. Retourne vrai si le worker n'est plus en cours.
+    /// </summary>
+    public static bool Stop()
+    {
+        // 1) Fin « propre » cote planificateur : libere l'etat d'instance de la tache.
+        Run("schtasks.exe", $"/End /TN \"{TaskName}\"");
+        // 2) Filet : on tue l'arbre (le sidecar Python est un enfant du worker).
+        Run("taskkill.exe", "/F /T /IM LocalTranscriber.Service.exe");
+        return WaitForState(s => s != WorkerState.Running, StopTimeout);
+    }
+
+    /// <summary>
+    /// Redemarrage atomique : arret verifie puis demarrage verifie. Elimine la course entre le
+    /// taskkill et le /Run qui rendait le redemarrage manuel aleatoire. Retourne l'etat final.
+    /// </summary>
+    public static bool Restart()
+    {
+        Stop();
+        return Start();
+    }
+
+    /// <summary>Attend que l'etat du worker satisfasse <paramref name="predicate"/> (poll, timeout).</summary>
+    private static bool WaitForState(Func<WorkerState, bool> predicate, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (predicate(QueryState()))
+                return true;
+            Thread.Sleep(PollInterval);
+        }
+        return predicate(QueryState());
+    }
 
     /// <summary>Arrete puis supprime la tache planifiee.</summary>
     public static void Uninstall()
