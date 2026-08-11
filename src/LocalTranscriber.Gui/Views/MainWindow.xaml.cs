@@ -53,11 +53,15 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    // Les actions tray passent par les commandes du ServiceViewModel (singleton, partagé avec la
+    // page) : exécution non bloquante (le VM déporte l'attente worker en tâche de fond), gating
+    // IsBusy/CanExecute commun, et rafraîchissement de l'état affiché — plus d'appel bloquant
+    // direct à WindowsServiceControl sur le thread UI, ni de désynchronisation d'état.
     private void Tray_StartService(object sender, RoutedEventArgs e) =>
-        Safe(() => WindowsServiceControl.Start());
+        TrayWorkerCommand(vm => vm.StartServiceCommand);
 
     private void Tray_StopService(object sender, RoutedEventArgs e) =>
-        Safe(() => WindowsServiceControl.Stop());
+        TrayWorkerCommand(vm => vm.StopServiceCommand);
 
     private void Tray_Quit(object sender, RoutedEventArgs e)
     {
@@ -66,11 +70,17 @@ public partial class MainWindow : Window
         Application.Current.Shutdown();
     }
 
-    private static void Safe(Action action)
+    private static void TrayWorkerCommand(
+        Func<ServiceViewModel, System.Windows.Input.ICommand> pick
+    )
     {
         try
         {
-            action();
+            if (App.Services?.GetService(typeof(ServiceViewModel)) is not ServiceViewModel vm)
+                return;
+            var command = pick(vm);
+            if (command.CanExecute(null))
+                command.Execute(null);
         }
         catch
         { /* geste tray best-effort */

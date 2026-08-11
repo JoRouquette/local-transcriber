@@ -362,10 +362,21 @@ public sealed class Worker : BackgroundService
             using var pollStop = new CancellationTokenSource();
             var poller = WatchCancelAsync(cancelFlag, jobCts, pollStop.Token);
 
+            // Garde-fou anti-blocage : au-dela de N min sans aucune sortie du moteur, on le tue.
+            var inactivityTimeout =
+                _config.EngineInactivityTimeoutMinutes > 0
+                    ? TimeSpan.FromMinutes(_config.EngineInactivityTimeoutMinutes)
+                    : (TimeSpan?)null;
+
             EngineResult result;
             try
             {
-                result = await _runner.RunAsync(request, line => _log?.Write(line), jobCts.Token);
+                result = await _runner.RunAsync(
+                    request,
+                    line => _log?.Write(line),
+                    jobCts.Token,
+                    inactivityTimeout
+                );
             }
             finally
             {
