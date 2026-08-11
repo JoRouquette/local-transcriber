@@ -178,6 +178,18 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     segments = _normalize_segments(tr.get("segments", []))
     spans = _speaker_spans(segments)
 
+    # Diagnostic diarisation : combien de clusters et quelle duree de parole chacun. Permet de
+    # distinguer une erreur de diarisation (mauvais clusters) d'une erreur d'identification (mauvais
+    # nom colle sur un bon cluster) en lisant simplement les logs du traitement.
+    if req.diarization_enabled and spans:
+        import sys as _sys
+
+        diag = ", ".join(
+            f"{lbl}={sum(e - s for s, e in sp):.0f}s"
+            for lbl, sp in sorted(spans.items())
+        )
+        print(f"[engine] diarisation : {len(spans)} cluster(s) -> {diag}", file=_sys.stderr, flush=True)
+
     # 4. Identification par snippets de voix (optionnelle)
     id_map: dict[str, tuple[str, float]] = {}
     if req.speaker_id_enabled and req.voices_dir:
