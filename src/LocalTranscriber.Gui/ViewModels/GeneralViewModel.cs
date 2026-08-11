@@ -151,9 +151,17 @@ public sealed partial class GeneralViewModel : ObservableValidator
     }
 
     // Ecriture live dans la config partagée.
-    partial void OnWatchRootChanged(string value) => C.WatchRoot = value;
+    partial void OnWatchRootChanged(string value)
+    {
+        C.WatchRoot = value;
+        QueueWatchRootCheck(value);
+    }
 
-    partial void OnOutputRootChanged(string value) => C.OutputRoot = value;
+    partial void OnOutputRootChanged(string value)
+    {
+        C.OutputRoot = value;
+        QueueOutputRootCheck(value);
+    }
 
     partial void OnModelCacheDirChanged(string value) => C.ModelCacheDir = value;
 
@@ -221,14 +229,66 @@ public sealed partial class GeneralViewModel : ObservableValidator
         return dlg.ShowDialog() == true ? dlg.FolderName : null;
     }
 
-    public static ValidationResult? ValidateDirectory(string? path, ValidationContext _)
+    // La validation synchrone reste VOLONTAIREMENT bon marche (non-vide seulement) : elle est
+    // rejouee a chaque frappe. Le test d'existence (Directory.Exists) est deporte en tache de fond
+    // debouncee (voir QueueDirectoryCheck) car sur un chemin reseau lent/indisponible il peut geler
+    // l'UI plusieurs dizaines de secondes ; il alimente un simple avertissement, pas un blocage.
+    public static ValidationResult? ValidateDirectory(string? path, ValidationContext _) =>
+        string.IsNullOrWhiteSpace(path)
+            ? new ValidationResult("Chemin requis.")
+            : ValidationResult.Success;
+
+    // ---- Avertissement d'existence (asynchrone, non bloquant) ----
+    [ObservableProperty]
+    private string _watchRootWarning = "";
+
+    [ObservableProperty]
+    private string _outputRootWarning = "";
+
+    private CancellationTokenSource? _watchCheckCts;
+    private CancellationTokenSource? _outputCheckCts;
+
+    private void QueueWatchRootCheck(string value)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return new ValidationResult("Chemin requis.");
-        var expanded = ConfigStore.ExpandPath(path);
-        return Directory.Exists(expanded)
-            ? ValidationResult.Success
-            : new ValidationResult("Dossier introuvable.");
+        _watchCheckCts?.Cancel();
+        _watchCheckCts = new CancellationTokenSource();
+        _ = CheckDirectoryAsync(value, _watchCheckCts.Token, w => WatchRootWarning = w);
+    }
+
+    private void QueueOutputRootCheck(string value)
+    {
+        _outputCheckCts?.Cancel();
+        _outputCheckCts = new CancellationTokenSource();
+        _ = CheckDirectoryAsync(value, _outputCheckCts.Token, w => OutputRootWarning = w);
+    }
+
+    /// <summary>
+    /// Verifie l'existence d'un dossier hors thread UI, apres un court debounce, et publie un
+    /// avertissement via <paramref name="setWarning"/>. Le controle precedent est annule a chaque
+    /// frappe (token). Ne bloque jamais la saisie, meme sur un chemin reseau lent/indisponible.
+    /// </summary>
+    private static async Task CheckDirectoryAsync(
+        string value,
+        CancellationToken token,
+        Action<string> setWarning
+    )
+    {
+        try
+        {
+            await Task.Delay(500, token);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                setWarning("");
+                return;
+            }
+            var expanded = ConfigStore.ExpandPath(value);
+            var exists = await Task.Run(() => Directory.Exists(expanded), token);
+            if (!token.IsCancellationRequested)
+                setWarning(exists ? "" : "Dossier introuvable (il sera créé ou à corriger).");
+        }
+        catch (OperationCanceledException)
+        { /* remplace par un controle plus recent : rien a faire */
+        }
     }
 
     public static ValidationResult? ValidateToken(string? token, ValidationContext _)

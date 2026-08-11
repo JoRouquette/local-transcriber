@@ -154,8 +154,19 @@ public sealed partial class ServiceViewModel : ObservableObject
         RunEngineSetupAsync(recreate: false, "Mise à jour du moteur Python…");
 
     [RelayCommand]
-    private Task ReinstallEngine() =>
-        RunEngineSetupAsync(recreate: true, "Réinstallation propre du moteur Python…");
+    private Task ReinstallEngine()
+    {
+        var confirm = MessageBox.Show(
+            "Réinstaller proprement le moteur Python ?\n\nL'environnement actuel sera supprimé "
+                + "puis recréé de zéro (plusieurs minutes). Le worker sera arrêté puis redémarré.",
+            "Confirmer la réinstallation",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning
+        );
+        return confirm == MessageBoxResult.Yes
+            ? RunEngineSetupAsync(recreate: true, "Réinstallation propre du moteur Python…")
+            : Task.CompletedTask;
+    }
 
     private async Task RunEngineSetupAsync(bool recreate, string startMessage)
     {

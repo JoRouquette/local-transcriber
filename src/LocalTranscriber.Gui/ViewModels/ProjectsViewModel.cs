@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalTranscriber.Core.Configuration;
@@ -24,8 +26,8 @@ public sealed partial class ProjectsViewModel : ObservableObject
         _snackbar = snackbar;
         // Sync auto au démarrage/rechargement : en mémoire uniquement, sans réécrire
         // config.local.json (qui contient le token) sans action explicite de l'utilisateur.
-        DiscoverProjects(announce: false, persist: false);
-        _settings.Reloaded += () => DiscoverProjects(announce: false, persist: false);
+        _ = DiscoverProjectsAsync(announce: false, persist: false);
+        _settings.Reloaded += () => _ = DiscoverProjectsAsync(announce: false, persist: false);
     }
 
     /// <summary>
@@ -34,25 +36,34 @@ public sealed partial class ProjectsViewModel : ObservableObject
     /// leurs réglages. Persiste si des nouveautés sont détectées.
     /// </summary>
     [RelayCommand]
-    private void RefreshProjects() => DiscoverProjects(announce: true, persist: true);
+    private Task RefreshProjects() => DiscoverProjectsAsync(announce: true, persist: true);
 
-    private void DiscoverProjects(bool announce, bool persist)
+    private async Task DiscoverProjectsAsync(bool announce, bool persist)
     {
         try
         {
             var watch = ConfigStore.ExpandPath(_settings.Config.WatchRoot);
-            if (string.IsNullOrWhiteSpace(watch) || !Directory.Exists(watch))
+            // Enumeration disque HORS thread UI : sur un dossier reseau lent/indisponible,
+            // Directory.Exists/GetDirectories peut bloquer plusieurs dizaines de secondes.
+            var dirs = await Task.Run(() =>
+                string.IsNullOrWhiteSpace(watch) || !Directory.Exists(watch)
+                    ? null
+                    : Directory.GetDirectories(watch)
+            );
+            if (dirs is null)
             {
                 if (announce)
                     _snackbar.Enqueue("Dossier surveillé introuvable : configurez-le d'abord.");
                 return;
             }
+
+            // De retour sur le thread UI : la mise a jour d'ObservableCollection s'y fait.
             var known = new HashSet<string>(
                 Projects.Select(p => p.RelativePath),
                 StringComparer.OrdinalIgnoreCase
             );
             var added = 0;
-            foreach (var dir in Directory.GetDirectories(watch))
+            foreach (var dir in dirs)
             {
                 var name = Path.GetFileName(dir);
                 if (string.IsNullOrEmpty(name) || known.Contains(name))
@@ -106,8 +117,17 @@ public sealed partial class ProjectsViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRemove))]
     private void RemoveProject()
     {
-        if (SelectedProject != null)
-            Projects.Remove(SelectedProject);
+        if (SelectedProject is null)
+            return;
+        var confirm = MessageBox.Show(
+            $"Supprimer le projet « {SelectedProject.Name} » et ses réglages spécifiques ?",
+            "Confirmer la suppression",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning
+        );
+        if (confirm != MessageBoxResult.Yes)
+            return;
+        Projects.Remove(SelectedProject);
     }
 
     private bool CanRemove() => SelectedProject != null;
