@@ -41,7 +41,10 @@ public partial class App : Application
                 Dispatcher.Invoke(ActivateMainWindow)
             );
 
-            EnsureWorkerRunning();
+            // Hors thread UI : WindowsServiceControl.Start() attend (poll jusqu'à ~15 s). Le faire
+            // ici en synchrone figerait la fenêtre au démarrage (la pompe de messages ne tourne
+            // qu'après le retour d'OnStartup). On le lance donc en tâche de fond.
+            _ = Task.Run(EnsureWorkerRunning);
         }
         catch (Exception ex)
         {

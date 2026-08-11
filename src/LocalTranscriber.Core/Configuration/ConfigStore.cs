@@ -27,14 +27,54 @@ public static class ConfigStore
     public static AppConfig Load(string? path = null)
     {
         path ??= DefaultConfigPath;
-        var config = File.Exists(path)
-            ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonDefaults.Options)
-                ?? new AppConfig()
-            : new AppConfig();
+
+        AppConfig config;
+        if (File.Exists(path))
+        {
+            try
+            {
+                config =
+                    JsonSerializer.Deserialize<AppConfig>(
+                        File.ReadAllText(path),
+                        JsonDefaults.Options
+                    ) ?? new AppConfig();
+            }
+            catch (Exception ex)
+            {
+                // Config corrompue (crash pendant une ecriture, edition manuelle, antivirus...) :
+                // ne JAMAIS faire tomber le service. Cette exception remontait auparavant avant
+                // meme la construction de l'hote (donc avant tout logger), rendant le demarrage
+                // impossible sans trace. On sauvegarde le fichier fautif pour diagnostic et on
+                // repart sur les valeurs par defaut.
+                BackupCorruptConfig(path, ex);
+                config = new AppConfig();
+            }
+        }
+        else
+        {
+            config = new AppConfig();
+        }
 
         MigrateLegacyUserPaths(config);
         ApplyLocalOverlay(config, path);
         return config;
+    }
+
+    /// <summary>Copie le config illisible vers un fichier horodate et trace la cause. Ne leve jamais.</summary>
+    private static void BackupCorruptConfig(string path, Exception ex)
+    {
+        try
+        {
+            var backup = $"{path}.corrupt-{DateTime.Now:yyyyMMdd-HHmmss}";
+            File.Copy(path, backup, overwrite: true);
+            Console.Error.WriteLine(
+                $"[config] {path} illisible ({ex.Message}). Copie de diagnostic : {backup}. "
+                    + "Valeurs par defaut appliquees."
+            );
+        }
+        catch
+        { /* best effort : le diagnostic ne doit pas empecher le demarrage */
+        }
     }
 
     /// <summary>

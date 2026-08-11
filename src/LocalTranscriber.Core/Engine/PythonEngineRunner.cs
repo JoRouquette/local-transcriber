@@ -26,10 +26,16 @@ public sealed class PythonEngineRunner
     }
 
     /// <param name="onLog">Reçoit les lignes de log (stderr) du moteur, en temps réel.</param>
+    /// <param name="inactivityTimeout">
+    /// Si &gt; 0, le moteur est tué s'il n'émet plus aucune sortie pendant cette durée (garde-fou
+    /// anti-blocage). Basé sur l'inactivité, pas la durée totale : un long fichier qui progresse
+    /// n'est jamais interrompu. Null = pas de garde-fou.
+    /// </param>
     public async Task<EngineResult> RunAsync(
         EngineRequest request,
         Action<string>? onLog = null,
-        CancellationToken ct = default
+        CancellationToken ct = default,
+        TimeSpan? inactivityTimeout = null
     )
     {
         if (!File.Exists(_enginePath))
@@ -72,6 +78,15 @@ public sealed class PythonEngineRunner
         var stderrDone = new TaskCompletionSource<bool>(
             TaskCreationOptions.RunContinuationsAsynchronously
         );
+
+        // Garde-fou anti-blocage : on note l'instant de la derniere sortie du moteur ; un watchdog
+        // tue le process s'il reste muet trop longtemps (deadlock CUDA, driver plante...).
+        long lastActivityTicks = DateTime.UtcNow.Ticks;
+        void MarkActivity() => Interlocked.Exchange(ref lastActivityTicks, DateTime.UtcNow.Ticks);
+        // CTS lie a l'annulation externe : le watchdog l'annulera aussi pour debloquer WaitForExit.
+        using var runCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var timedOut = false;
+
         Process? proc = null;
         try
         {
@@ -83,6 +98,7 @@ public sealed class PythonEngineRunner
                     stdoutDone.TrySetResult(true);
                     return;
                 }
+                MarkActivity();
                 lock (bufferLock)
                     stdout.AppendLine(e.Data);
             };
@@ -93,6 +109,7 @@ public sealed class PythonEngineRunner
                     stderrDone.TrySetResult(true);
                     return;
                 }
+                MarkActivity();
                 _logger.LogDebug("[engine] {Line}", e.Data);
                 onLog?.Invoke(e.Data);
             };
@@ -100,7 +117,56 @@ public sealed class PythonEngineRunner
             proc.Start();
             proc.BeginOutputReadLine();
             proc.BeginErrorReadLine();
-            await proc.WaitForExitAsync(ct);
+
+            // Watchdog d'inactivite : boucle legere qui compare l'inactivite au seuil et, le cas
+            // echeant, marque le timeout et annule runCts (ce qui fait sortir WaitForExitAsync).
+            var watchdog = Task.CompletedTask;
+            if (inactivityTimeout is { } limit && limit > TimeSpan.Zero)
+            {
+                watchdog = Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            while (!runCts.IsCancellationRequested)
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(15), runCts.Token);
+                                var idle = TimeSpan.FromTicks(
+                                    DateTime.UtcNow.Ticks - Interlocked.Read(ref lastActivityTicks)
+                                );
+                                if (idle >= limit)
+                                {
+                                    timedOut = true;
+                                    runCts.Cancel();
+                                    return;
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        { /* fin normale : le process s'est termine, on arrete le watchdog */
+                        }
+                    },
+                    CancellationToken.None
+                );
+            }
+
+            try
+            {
+                await proc.WaitForExitAsync(runCts.Token);
+            }
+            finally
+            {
+                // Le process est sorti (ou a ete annule) : on arrete le watchdog proprement.
+                if (!runCts.IsCancellationRequested)
+                    runCts.Cancel();
+                try
+                {
+                    await watchdog;
+                }
+                catch
+                { /* le watchdog ne remonte rien d'utile */
+                }
+            }
             // On attend le drainage complet des deux flux avant de lire les buffers : les handlers
             // peuvent encore avoir des lignes en attente au moment ou le process se termine.
             await Task.WhenAll(stdoutDone.Task, stderrDone.Task);
@@ -127,9 +193,23 @@ public sealed class PythonEngineRunner
         }
         catch (OperationCanceledException)
         {
-            // Annulation (arret du worker ou annulation du job) : on tue le process moteur
-            // et son arbre pour ne pas laisser de Python orphelin, puis on signale l'annulation.
+            // On tue le process moteur et son arbre pour ne pas laisser de Python orphelin.
             KillTree(proc);
+
+            // Timeout d'inactivite (watchdog) vs annulation externe (arret worker / annulation
+            // utilisateur). L'annulation externe prime si les deux surviennent.
+            if (timedOut && !ct.IsCancellationRequested)
+            {
+                var minutes = inactivityTimeout?.TotalMinutes ?? 0;
+                return new EngineResult
+                {
+                    Status = "error",
+                    AudioPath = request.AudioPath,
+                    Error =
+                        $"Moteur bloque : aucune activite pendant {minutes:0} min, traitement interrompu.",
+                };
+            }
+
             return new EngineResult
             {
                 Status = "cancelled",

@@ -123,6 +123,15 @@ public sealed class AppConfig
     public int MaxParallelJobs { get; set; } = 1;
 
     /// <summary>
+    /// Delai d'INACTIVITE du moteur (aucune ligne de log emise) au-dela duquel le job est
+    /// considere bloque : le process moteur (et son arbre Python) est tue et le job marque en
+    /// echec, au lieu de figer la file indefiniment (deadlock CUDA, driver GPU plante, fichier
+    /// pathologique). Base sur l'inactivite et non la duree totale : un long fichier qui progresse
+    /// (le moteur emet regulierement des logs) n'est jamais interrompu a tort. 0 = desactive.
+    /// </summary>
+    public int EngineInactivityTimeoutMinutes { get; set; } = 20;
+
+    /// <summary>
     /// Retente automatiquement les fichiers en echec au prochain scan, tant que leur nombre de
     /// tentatives reste sous <see cref="MaxAutoRetries"/>. Desactive par defaut : sinon les echecs
     /// restent en Failed (retraitement manuel via le bouton Retraiter).
