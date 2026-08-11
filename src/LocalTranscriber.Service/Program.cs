@@ -1,9 +1,27 @@
+using System.Threading;
 using LocalTranscriber.Core.Configuration;
 using LocalTranscriber.Core.Embedding;
 using LocalTranscriber.Core.Search;
 using LocalTranscriber.Mcp.Resources;
 using LocalTranscriber.Mcp.Tools;
 using LocalTranscriber.Service;
+
+// Instance unique machine-wide : un seul worker peut tourner a la fois. Deux workers = deux
+// redacteurs de la meme base SQLite (index + jobs) + double bind du port MCP => corruption et
+// erreurs de liaison. Le mutex Global\ couvre toutes les sessions (tache planifiee ET lancement
+// manuel). On se fie uniquement a createdNew (pas de WaitOne) pour eviter tout blocage/abandon.
+using var singleInstance = new Mutex(
+    initiallyOwned: true,
+    @"Global\LocalTranscriber.Worker.SingleInstance",
+    out var isPrimary
+);
+if (!isPrimary)
+{
+    Console.Error.WriteLine(
+        "[worker] Une instance du worker tourne deja : arret immediat de ce doublon."
+    );
+    return; // sortie 0 : la tache planifiee ne boucle pas en erreur.
+}
 
 // Hote ASP.NET Core : Kestrel (localhost) sert le MCP en HTTP, et le meme processus
 // fait tourner le Worker (surveillance/transcription). Installable en service Windows.

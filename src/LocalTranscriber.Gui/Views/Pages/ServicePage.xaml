@@ -132,76 +132,122 @@
         </StackPanel>
       </materialDesign:Card>
 
-      <!-- Worker : état + actions -->
+      <!-- Worker : état + actions (boutons selon l'état, transition explicite) -->
       <materialDesign:Card
         Grid.Row="2"
         Padding="16,12"
         Margin="0,12"
         materialDesign:ElevationAssist.Elevation="Dp2"
       >
-        <WrapPanel>
-          <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
-            <materialDesign:PackIcon
-              Kind="Circle"
-              Width="16"
-              Height="16"
-              VerticalAlignment="Center"
-            >
-              <materialDesign:PackIcon.Style>
-                <Style TargetType="materialDesign:PackIcon">
-                  <Setter Property="Foreground" Value="#9E9E9E" />
-                  <Style.Triggers>
-                    <DataTrigger Binding="{Binding IsRunning}" Value="True">
-                      <Setter Property="Foreground" Value="#4CAF50" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </materialDesign:PackIcon.Style>
-            </materialDesign:PackIcon>
-            <TextBlock
-              Text="{Binding ServiceStatus}"
-              VerticalAlignment="Center"
-              Margin="10,0,0,0"
-              FontWeight="Medium"
-            />
-          </StackPanel>
+        <StackPanel>
+          <WrapPanel>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,8">
+              <materialDesign:PackIcon
+                Kind="Circle"
+                Width="16"
+                Height="16"
+                VerticalAlignment="Center"
+              >
+                <materialDesign:PackIcon.Style>
+                  <Style TargetType="materialDesign:PackIcon">
+                    <!-- Par défaut : gris (arrêté / non installé) -->
+                    <Setter Property="Foreground" Value="#9E9E9E" />
+                    <Style.Triggers>
+                      <!-- En cours : vert -->
+                      <DataTrigger Binding="{Binding IsRunning}" Value="True">
+                        <Setter Property="Foreground" Value="#4CAF50" />
+                      </DataTrigger>
+                      <!-- Transition : ambre (priorité sur les autres) -->
+                      <DataTrigger Binding="{Binding IsBusy}" Value="True">
+                        <Setter Property="Foreground" Value="#FB8C00" />
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </materialDesign:PackIcon.Style>
+              </materialDesign:PackIcon>
+              <TextBlock
+                Text="{Binding ServiceStatus}"
+                VerticalAlignment="Center"
+                Margin="10,0,0,0"
+                FontWeight="Medium"
+              />
+              <!-- Libellé de transition (Démarrage… / Arrêt… / Redémarrage…) -->
+              <TextBlock
+                Text="{Binding WorkerBusyLabel}"
+                VerticalAlignment="Center"
+                Margin="10,0,0,0"
+                FontStyle="Italic"
+                Foreground="#FB8C00"
+                Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+              />
+            </StackPanel>
 
-          <WrapPanel Orientation="Horizontal">
-            <Button
-              Style="{StaticResource MaterialDesignOutlinedButton}"
-              Command="{Binding InstallServiceCommand}"
-              Content="Installer"
-              Margin="0,0,8,0"
-            />
-            <Button
-              Style="{StaticResource MaterialDesignRaisedButton}"
-              Command="{Binding StartServiceCommand}"
-              Margin="0,0,8,0"
-            >
-              <StackPanel Orientation="Horizontal">
-                <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBlock Text="Démarrer" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-            <Button
-              Style="{StaticResource MaterialDesignOutlinedButton}"
-              Command="{Binding StopServiceCommand}"
-              Margin="0,0,8,0"
-            >
-              <StackPanel Orientation="Horizontal">
-                <materialDesign:PackIcon Kind="Stop" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <TextBlock Text="Arrêter" VerticalAlignment="Center" />
-              </StackPanel>
-            </Button>
-            <Button
-              Style="{StaticResource MaterialDesignIconButton}"
-              Command="{Binding RefreshCommand}"
-              ToolTip="Rafraîchir"
-            >
-              <materialDesign:PackIcon Kind="Refresh" />
-            </Button>
+            <WrapPanel Orientation="Horizontal">
+              <!-- Non installé -->
+              <Button
+                Style="{StaticResource MaterialDesignRaisedButton}"
+                Command="{Binding InstallServiceCommand}"
+                Content="Installer"
+                Margin="0,0,8,0"
+                Visibility="{Binding IsNotInstalled, Converter={StaticResource BoolToVis}}"
+              />
+              <!-- Arrêté -->
+              <Button
+                Style="{StaticResource MaterialDesignRaisedButton}"
+                Command="{Binding StartServiceCommand}"
+                Margin="0,0,8,0"
+                Visibility="{Binding IsStopped, Converter={StaticResource BoolToVis}}"
+              >
+                <StackPanel Orientation="Horizontal">
+                  <materialDesign:PackIcon Kind="Play" VerticalAlignment="Center" Margin="0,0,6,0" />
+                  <TextBlock Text="Démarrer" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <!-- En cours : Redémarrer + Arrêter -->
+              <Button
+                Style="{StaticResource MaterialDesignRaisedButton}"
+                Command="{Binding RestartServiceCommand}"
+                Margin="0,0,8,0"
+                Visibility="{Binding IsRunningState, Converter={StaticResource BoolToVis}}"
+              >
+                <StackPanel Orientation="Horizontal">
+                  <materialDesign:PackIcon
+                    Kind="Restart"
+                    VerticalAlignment="Center"
+                    Margin="0,0,6,0"
+                  />
+                  <TextBlock Text="Redémarrer" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button
+                Style="{StaticResource MaterialDesignOutlinedButton}"
+                Command="{Binding StopServiceCommand}"
+                Margin="0,0,8,0"
+                Visibility="{Binding IsRunningState, Converter={StaticResource BoolToVis}}"
+              >
+                <StackPanel Orientation="Horizontal">
+                  <materialDesign:PackIcon Kind="Stop" VerticalAlignment="Center" Margin="0,0,6,0" />
+                  <TextBlock Text="Arrêter" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button
+                Style="{StaticResource MaterialDesignIconButton}"
+                Command="{Binding RefreshCommand}"
+                ToolTip="Rafraîchir"
+              >
+                <materialDesign:PackIcon Kind="Refresh" />
+              </Button>
+            </WrapPanel>
           </WrapPanel>
-        </WrapPanel>
+
+          <!-- Barre de progression pendant une transition worker -->
+          <ProgressBar
+            Style="{StaticResource MaterialDesignLinearProgressBar}"
+            IsIndeterminate="True"
+            Margin="0,10,0,0"
+            Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}"
+          />
+        </StackPanel>
       </materialDesign:Card>
 
       <!-- Monitoring de la file + santé des services -->

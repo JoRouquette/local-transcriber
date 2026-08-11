@@ -12,10 +12,23 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Velopack DOIT passer en premier (hooks install/update/uninstall lancent des process
+        // transitoires). Le verrou d'instance unique vient APRÈS, pour ne pas les compter.
         VelopackApp.Build().Run();
 
-        var app = new App();
-        app.InitializeComponent();
-        app.Run();
+        // Instance unique : si une GUI tourne déjà, on la réveille et on sort sans doublon.
+        if (!SingleInstanceGuard.TryAcquire())
+            return;
+
+        try
+        {
+            var app = new App();
+            app.InitializeComponent();
+            app.Run();
+        }
+        finally
+        {
+            SingleInstanceGuard.Release();
+        }
     }
 }

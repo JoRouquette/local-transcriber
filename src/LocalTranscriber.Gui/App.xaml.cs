@@ -36,6 +36,11 @@ public partial class App : Application
             window.DataContext = Services.GetRequiredService<ShellViewModel>();
             window.Show();
 
+            // Réveil depuis un second lancement : on ramène la fenêtre existante au premier plan.
+            SingleInstanceGuard.StartActivationListener(() =>
+                Dispatcher.Invoke(ActivateMainWindow)
+            );
+
             EnsureWorkerRunning();
         }
         catch (Exception ex)
@@ -54,6 +59,21 @@ public partial class App : Application
             );
             Shutdown(-1);
         }
+    }
+
+    /// <summary>Restaure et met au premier plan la fenêtre principale (réveil d'instance unique).</summary>
+    private void ActivateMainWindow()
+    {
+        var window = MainWindow;
+        if (window is null)
+            return;
+        if (window.WindowState == WindowState.Minimized)
+            window.WindowState = WindowState.Normal;
+        window.Show();
+        window.Activate();
+        window.Topmost = true;
+        window.Topmost = false;
+        window.Focus();
     }
 
     private void OnDispatcherUnhandledException(

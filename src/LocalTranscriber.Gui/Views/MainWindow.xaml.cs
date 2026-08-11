@@ -54,10 +54,10 @@ public partial class MainWindow : Window
     }
 
     private void Tray_StartService(object sender, RoutedEventArgs e) =>
-        Safe(WindowsServiceControl.Start);
+        Safe(() => WindowsServiceControl.Start());
 
     private void Tray_StopService(object sender, RoutedEventArgs e) =>
-        Safe(WindowsServiceControl.Stop);
+        Safe(() => WindowsServiceControl.Stop());
 
     private void Tray_Quit(object sender, RoutedEventArgs e)
     {
