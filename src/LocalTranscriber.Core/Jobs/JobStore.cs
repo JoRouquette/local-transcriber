@@ -192,27 +192,54 @@ public sealed class JobStore
     }
 
     /// <summary>
-    /// Relance manuelle : repasse en Pending TOUS les jobs Failed, sans tenir compte du plafond
-    /// de tentatives (contrairement a <see cref="RequeueFailedForRetry"/>). Efface l'erreur.
+    /// Relance manuelle : repasse en Pending TOUS les jobs Failed et REMET leur compteur de
+    /// tentatives a zero (repart proprement), sans tenir compte du plafond (contrairement a
+    /// <see cref="RequeueFailedForRetry"/>). Efface l'erreur.
     /// </summary>
     public int RequeueAllFailed()
     {
         using var c = Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText =
-            "UPDATE jobs SET status='Pending', error=NULL, updated_at=$now WHERE status='Failed'";
+            "UPDATE jobs SET status='Pending', error=NULL, attempts=0, updated_at=$now WHERE status='Failed'";
         cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
         return cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Repasse en Pending les jobs restes Processing (ex. apres un crash du service).</summary>
-    public int RequeueStale()
+    /// <summary>
+    /// Recupere les jobs restes « Processing » (ex. worker interrompu : kill watchdog, OOM, crash,
+    /// redemarrage). GARDE ANTI-BOUCLE : seuls ceux dont le nombre de tentatives est encore SOUS
+    /// <paramref name="maxAttempts"/> sont repasses en Pending ; au-dela, le job est marque Failed
+    /// et abandonne — sinon un fichier qui interrompt le worker serait re-enfile a chaque
+    /// redemarrage, indefiniment. Retourne le nombre de jobs effectivement re-enfiles.
+    /// </summary>
+    public int RequeueStale(int maxAttempts)
     {
+        if (maxAttempts < 1)
+            maxAttempts = 1;
         using var c = Open();
+        var now = DateTime.UtcNow.ToString("o");
+
+        // 1) Au-dela du plafond : on abandonne (Failed) plutot que de boucler.
+        using (var fail = c.CreateCommand())
+        {
+            fail.CommandText =
+                "UPDATE jobs SET status='Failed', error=$e, updated_at=$now, finished_at=$now WHERE status='Processing' AND attempts >= $max";
+            fail.Parameters.AddWithValue(
+                "$e",
+                "Interrompu a repetition (redemarrages du worker) — abandonne."
+            );
+            fail.Parameters.AddWithValue("$now", now);
+            fail.Parameters.AddWithValue("$max", maxAttempts);
+            fail.ExecuteNonQuery();
+        }
+
+        // 2) Sous le plafond : nouvelle chance.
         using var cmd = c.CreateCommand();
         cmd.CommandText =
-            "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Processing'";
-        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+            "UPDATE jobs SET status='Pending', updated_at=$now WHERE status='Processing' AND attempts < $max";
+        cmd.Parameters.AddWithValue("$now", now);
+        cmd.Parameters.AddWithValue("$max", maxAttempts);
         return cmd.ExecuteNonQuery();
     }
 

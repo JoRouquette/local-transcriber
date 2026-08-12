@@ -18,10 +18,13 @@ using var singleInstance = new Mutex(
 if (!isPrimary)
 {
     Console.Error.WriteLine(
-        "[worker] Une instance du worker tourne deja : arret immediat de ce doublon."
+        $"[worker] Doublon detecte (PID {Environment.ProcessId}) : une instance du worker tourne "
+            + "deja. Arret immediat de ce processus."
     );
     return; // sortie 0 : la tache planifiee ne boucle pas en erreur.
 }
+
+Console.Error.WriteLine($"[worker] Instance unique acquise (PID {Environment.ProcessId}).");
 
 // Hote ASP.NET Core : Kestrel (localhost) sert le MCP en HTTP, et le meme processus
 // fait tourner le Worker (surveillance/transcription). Installable en service Windows.

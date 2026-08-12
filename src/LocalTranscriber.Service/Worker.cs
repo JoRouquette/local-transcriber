@@ -63,7 +63,14 @@ public sealed class Worker : BackgroundService
         // depasser le delai de 30 s => erreur SCM 7009 "le service n'a pas repondu").
         await Task.Yield();
 
-        _logger.LogInformation("LocalTranscriber demarre.");
+        // Identite du worker : PID + heure de demarrage. Permet de PROUVER dans les logs qu'un
+        // seul worker tourne (un second demarrage laisserait une trace « doublon » cote Program).
+        using (var self = System.Diagnostics.Process.GetCurrentProcess())
+            _logger.LogInformation(
+                "LocalTranscriber demarre (worker PID {Pid}, {Start:u}).",
+                self.Id,
+                DateTime.Now
+            );
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -160,7 +167,16 @@ public sealed class Worker : BackgroundService
         // Ces stores ouvrent une connexion SQLite par operation (using var c = Open()) et ne
         // conservent aucun handle persistant : rien a liberer avant de les recreer.
         _jobs = new JobStore(Path.Combine(_dataDir, "jobs.db"));
-        _jobs.RequeueStale();
+        // Garde anti-boucle : les jobs interrompus ne sont repris que sous le plafond de
+        // tentatives ; au-dela ils sont abandonnes (Failed) au lieu d'etre re-enfiles a l'infini.
+        var staleMax = Math.Max(1, _config.MaxAutoRetries);
+        var recovered = _jobs.RequeueStale(staleMax);
+        if (recovered > 0)
+            _logger.LogInformation(
+                "Recuperation : {Count} job(s) interrompu(s) re-enfile(s) (plafond {Max}).",
+                recovered,
+                staleMax
+            );
         _commands = new CommandStore(Path.Combine(_dataDir, "commands.db"));
         _seen.Clear();
 
@@ -324,7 +340,7 @@ public sealed class Worker : BackgroundService
                 }
                 else if (cmd.Type == CommandTypes.RequeueStale)
                 {
-                    var n = _jobs.RequeueStale();
+                    var n = _jobs.RequeueStale(Math.Max(1, _config.MaxAutoRetries));
                     _logger.LogInformation("Deblocage des jobs figes : {N} job(s).", n);
                     _log?.Write($"[file] deblocage des jobs figes : {n} job(s)");
                 }
