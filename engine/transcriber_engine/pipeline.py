@@ -123,6 +123,15 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     model = whisperx.load_model(
         req.model_size, device, compute_type=compute_type, language=lang, download_root=cache
     )
+    # Sur CPU, un batch_size eleve consomme beaucoup de RAM (cause de « mkl_malloc: failed to
+    # allocate memory ») pour un gain de vitesse faible : on le plafonne. On raccourcit aussi la
+    # taille de chunk pour reduire le pic memoire par appel de transcription.
+    effective_batch = req.batch_size
+    chunk_target = float(req.chunk_minutes) * 60.0
+    if device == "cpu":
+        effective_batch = max(1, min(req.batch_size, 4))
+        chunk_target = min(chunk_target, 300.0)  # 5 min max par chunk sur CPU
+
     threshold_seconds = float(getattr(req, "chunk_threshold_minutes", 20)) * 60.0
     if getattr(req, "chunking_enabled", False) and duration > threshold_seconds:
         import sys as _sys
@@ -132,14 +141,14 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         tr = chunking.chunked_transcribe(
             model,
             audio,
-            batch_size=req.batch_size,
+            batch_size=effective_batch,
             language=lang,
-            target_seconds=float(req.chunk_minutes) * 60.0,
+            target_seconds=chunk_target,
             min_silence_seconds=float(req.chunk_min_silence_seconds),
             log=lambda m: print(m, file=_sys.stderr, flush=True),
         )
     else:
-        tr = model.transcribe(audio, batch_size=req.batch_size, language=lang)
+        tr = model.transcribe(audio, batch_size=effective_batch, language=lang)
     detected_lang = tr.get("language", req.language)
 
     # 2. Alignement (timestamps au mot)

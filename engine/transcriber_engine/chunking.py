@@ -101,4 +101,9 @@ def chunked_transcribe(
             seg["start"] = float(seg.get("start", 0.0)) + offset
             seg["end"] = float(seg.get("end", 0.0)) + offset
             all_segments.append(seg)
+        # Libere le pic memoire du chunk avant le suivant (limite « mkl_malloc failed »).
+        del sub_tr
+        import gc
+
+        gc.collect()
     return {"segments": all_segments, "language": detected}

@@ -22,6 +22,30 @@ def _eprint(*args: object) -> None:
     print(*args, file=sys.stderr, flush=True)
 
 
+def _start_heartbeat(interval: float = 60.0):
+    """Emet une ligne stderr periodique pendant le traitement.
+
+    La transcription WhisperX sur CPU est SILENCIEUSE pendant de longues minutes (un gros
+    chunk peut prendre >20 min sans aucune sortie). Le watchdog d'inactivite cote .NET tue
+    alors un moteur qui travaille pourtant normalement. Ce battement garantit une trace de
+    vie reguliere tant que le process n'est pas reellement fige (un vrai blocage natif fige
+    aussi ce thread -> plus de battement -> le watchdog joue son role). Retourne un Event a
+    positionner pour arreter le battement.
+    """
+    import threading
+    import time
+
+    stop = threading.Event()
+    t0 = time.monotonic()
+
+    def _beat() -> None:
+        while not stop.wait(interval):
+            _eprint(f"[engine] traitement en cours… ({time.monotonic() - t0:.0f}s ecoulees)")
+
+    threading.Thread(target=_beat, daemon=True).start()
+    return stop
+
+
 def _emit(result: EngineResult, out=None) -> int:
     out = out if out is not None else sys.stdout
     out.write(json.dumps(result.to_dict(), ensure_ascii=False))
@@ -108,6 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     # que SEUL le JSON de resultat sorte sur le vrai stdout (lu par le service .NET).
     real_out = sys.stdout
     sys.stdout = sys.stderr
+    heartbeat = _start_heartbeat()
     try:
         from . import pipeline
 
@@ -120,6 +145,8 @@ def main(argv: list[str] | None = None) -> int:
 
         _eprint(traceback.format_exc())
         return _emit(EngineResult(status="error", audio_path=req.audio_path, error=str(e)), real_out)
+    finally:
+        heartbeat.set()
 
 
 if __name__ == "__main__":
