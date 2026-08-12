@@ -266,11 +266,11 @@ public sealed partial class ServiceViewModel : ObservableObject
     [RelayCommand]
     private void CancelCurrent()
     {
-        if (ProcessingCount == 0)
-        {
-            _snackbar.Enqueue("Aucun traitement en cours.");
-            return;
-        }
+        // On n'utilise PLUS le compteur ProcessingCount comme garde : il vient du resume DB
+        // rafraichi toutes les 3 s, donc souvent perime — c'etait la cause de l'annulation
+        // « aleatoire » (bouton refuse alors qu'un job tourne, ou flag pose trop tard). On depose
+        // toujours le drapeau : le worker l'ignore s'il ne traite rien (et le nettoie au prochain
+        // passage), et l'honore immediatement si un job est en cours.
         try
         {
             var dataDir = ConfigStore.ExpandPath(_settings.Config.DataDir);
@@ -283,6 +283,20 @@ public sealed partial class ServiceViewModel : ObservableObject
         {
             _snackbar.Enqueue("Erreur : " + ex.Message);
         }
+    }
+
+    [RelayCommand]
+    private void RetryFailed()
+    {
+        _settings.EnqueueCommand(CommandTypes.RetryFailed, "");
+        _snackbar.Enqueue("Relance des fichiers en échec demandée.");
+    }
+
+    [RelayCommand]
+    private void UnblockStuck()
+    {
+        _settings.EnqueueCommand(CommandTypes.RequeueStale, "");
+        _snackbar.Enqueue("Déblocage des traitements figés demandé.");
     }
 
     // ================= Worker : cycle de vie =================

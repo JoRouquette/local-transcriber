@@ -191,6 +191,20 @@ public sealed class JobStore
         return cmd.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Relance manuelle : repasse en Pending TOUS les jobs Failed, sans tenir compte du plafond
+    /// de tentatives (contrairement a <see cref="RequeueFailedForRetry"/>). Efface l'erreur.
+    /// </summary>
+    public int RequeueAllFailed()
+    {
+        using var c = Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText =
+            "UPDATE jobs SET status='Pending', error=NULL, updated_at=$now WHERE status='Failed'";
+        cmd.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("o"));
+        return cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Repasse en Pending les jobs restes Processing (ex. apres un crash du service).</summary>
     public int RequeueStale()
     {

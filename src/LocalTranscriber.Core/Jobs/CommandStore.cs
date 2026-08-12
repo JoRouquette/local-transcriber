@@ -6,6 +6,8 @@ public static class CommandTypes
 {
     public const string ReprocessFile = "reprocess_file"; // payload = chemin audio
     public const string ReprocessProject = "reprocess_project"; // payload = chemin relatif du projet
+    public const string RetryFailed = "retry_failed"; // relance TOUS les jobs en echec (sans payload)
+    public const string RequeueStale = "requeue_stale"; // debloque les jobs figes en Processing (sans payload)
 }
 
 public sealed record TranscriptionCommand(long Id, string Type, string Payload, DateTime CreatedAt);

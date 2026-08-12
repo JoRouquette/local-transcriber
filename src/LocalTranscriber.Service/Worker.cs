@@ -316,6 +316,18 @@ public sealed class Worker : BackgroundService
                         _seen.Remove(k);
                     _logger.LogInformation("Retraitement du projet demande : {Dir}", dir);
                 }
+                else if (cmd.Type == CommandTypes.RetryFailed)
+                {
+                    var n = _jobs.RequeueAllFailed();
+                    _logger.LogInformation("Relance des echecs : {N} job(s) re-enfile(s).", n);
+                    _log?.Write($"[file] relance des echecs : {n} job(s)");
+                }
+                else if (cmd.Type == CommandTypes.RequeueStale)
+                {
+                    var n = _jobs.RequeueStale();
+                    _logger.LogInformation("Deblocage des jobs figes : {N} job(s).", n);
+                    _log?.Write($"[file] deblocage des jobs figes : {n} job(s)");
+                }
             }
             catch (Exception ex)
             {
@@ -440,7 +452,7 @@ public sealed class Worker : BackgroundService
                     jobCts.Cancel();
                     return;
                 }
-                await Task.Delay(1000, until);
+                await Task.Delay(500, until);
             }
         }
         catch (OperationCanceledException)
