@@ -98,8 +98,11 @@ def chunked_transcribe(
             detected = sub_tr.get("language")
         for seg in sub_tr.get("segments", []):
             seg = dict(seg)
-            seg["start"] = float(seg.get("start", 0.0)) + offset
-            seg["end"] = float(seg.get("end", 0.0)) + offset
+            # `or 0.0` : tolere un start/end absent OU None (whisperx peut renvoyer None sur un
+            # segment degenere ; float(None) planterait tout le fichier). Pattern deja utilise
+            # dans pipeline._normalize_segments.
+            seg["start"] = (float(seg.get("start") or 0.0)) + offset
+            seg["end"] = (float(seg.get("end") or 0.0)) + offset
             all_segments.append(seg)
         # Libere le pic memoire du chunk avant le suivant (limite « mkl_malloc failed »).
         del sub_tr

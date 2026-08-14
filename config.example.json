@@ -6,6 +6,7 @@
   "engine_executable": "engine\\transcriber-engine.exe",
   "engine_env_dir": "%LOCALAPPDATA%\\LocalTranscriberData\\engine-env",
   "auto_install_updates": true,
+  "_comment_hf_token": "Ne PAS mettre votre token ici (fichier partageable). Renseignez-le dans config.local.json (non versionne).",
   "hf_token": "",
   "file_types": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
   "stabilization_seconds": 5,

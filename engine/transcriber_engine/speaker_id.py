@@ -170,7 +170,10 @@ class SpeakerIdentifier:
                 try:
                     self._references[name] = np.asarray(self._inference(_load_wave(path))).reshape(-1)
                     seen.add(name)
-                except Exception:
+                except Exception as e:  # noqa: BLE001
+                    # Coherent avec la boucle .wav : on trace pourquoi une voix de reference n'a
+                    # pas pu etre chargee, au lieu d'un abandon silencieux.
+                    _log(f"[engine] snippet illisible {os.path.basename(path)} : {e}")
                     continue
         return len(self._references)
 

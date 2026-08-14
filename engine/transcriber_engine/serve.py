@@ -68,12 +68,23 @@ def serve(port: int, model_name: str, cache_dir: Optional[str], device: str = "c
         srv.close()
 
 
+# Bornes de securite : le sidecar ecoute en loopback, mais un appelant local peu soigneux (bug
+# de chunking .NET, ou process tiers) ne doit pas pouvoir provoquer un pic memoire/latence.
+_MAX_TEXTS = 512
+_MAX_TOTAL_CHARS = 2_000_000
+
+
 def _handle(embedder: Embedder, line: str) -> dict:
     try:
         req = json.loads(line)
         texts = req.get("texts", [])
         if not isinstance(texts, list):
             return {"error": "texts must be a list"}
+        if len(texts) > _MAX_TEXTS:
+            return {"error": f"trop de textes ({len(texts)} > {_MAX_TEXTS})"}
+        total = sum(len(t) for t in texts if isinstance(t, str))
+        if total > _MAX_TOTAL_CHARS:
+            return {"error": f"charge de texte trop volumineuse ({total} > {_MAX_TOTAL_CHARS})"}
         kind = req.get("kind", "passage")
         vecs = embedder.embed(texts, kind)
         return {"vectors": vecs.tolist(), "dim": embedder.dim, "model": embedder.model_name}

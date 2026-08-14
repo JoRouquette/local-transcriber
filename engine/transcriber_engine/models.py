@@ -38,6 +38,17 @@ class EngineRequest:
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "EngineRequest":
         known = EngineRequest.__dataclass_fields__.keys()  # type: ignore[attr-defined]
+        # Trace les cles ignorees : un drift de contrat .NET <-> Python (champ renomme/retire)
+        # deviendrait sinon invisible (reglages envoyes par le service silencieusement perdus).
+        ignored = set(d) - set(known)
+        if ignored:
+            import sys
+
+            print(
+                f"[engine] cles de requete ignorees (drift de contrat ?) : {sorted(ignored)}",
+                file=sys.stderr,
+                flush=True,
+            )
         return EngineRequest(**{k: v for k, v in d.items() if k in known})
 
 

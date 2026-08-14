@@ -64,10 +64,16 @@ def _load_diarization_pipeline(hf_token: Optional[str], device: str):
 def _normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for seg in segments:
+        start = float(seg.get("start") or 0.0)
+        end = float(seg.get("end") or 0.0)
+        # Garantit end >= start : un segment mal aligne a duree negative casserait certains
+        # lecteurs SRT et l'ordre d'affichage.
+        if end < start:
+            end = start
         out.append(
             {
-                "start": float(seg.get("start") or 0.0),
-                "end": float(seg.get("end") or 0.0),
+                "start": start,
+                "end": end,
                 "text": (seg.get("text") or "").strip(),
                 "speaker_label": seg.get("speaker") or "SPEAKER_?",
                 "speaker_name": None,
@@ -89,6 +95,23 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     import whisperx
 
     result = EngineResult(audio_path=req.audio_path, engine_version=__version__)
+
+    # Bornage defensif : une requete malformee ne doit pas produire un comportement aberrant
+    # (chunk_minutes<=0 -> sur-decoupage en micro-chunks ; min>max transmis a pyannote ; seuil
+    # hors [0,1]).
+    if req.chunk_minutes < 1:
+        req.chunk_minutes = 1
+    if req.chunk_threshold_minutes < 1:
+        req.chunk_threshold_minutes = 1
+    if req.batch_size < 1:
+        req.batch_size = 1
+    req.speaker_id_threshold = min(1.0, max(0.0, float(req.speaker_id_threshold)))
+    if (
+        req.min_speakers is not None
+        and req.max_speakers is not None
+        and req.min_speakers > req.max_speakers
+    ):
+        req.min_speakers, req.max_speakers = req.max_speakers, req.min_speakers
 
     device = resolve_device(req.device)
     compute_type = resolve_compute_type(req.compute_type, device)
@@ -119,6 +142,14 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         )
         return result
     duration = len(audio) / 16000.0
+
+    # Fichier vide/silencieux : inutile d'engager le modele, message clair.
+    if duration <= 0.0 or len(audio) == 0:
+        result.status = "error"
+        result.error = (
+            f"Fichier audio vide ou sans piste exploitable : {os.path.basename(req.audio_path)}."
+        )
+        return result
     lang = None if req.language == "auto" else req.language
     model = whisperx.load_model(
         req.model_size, device, compute_type=compute_type, language=lang, download_root=cache
@@ -159,9 +190,12 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         tr = whisperx.align(
             tr["segments"], model_a, metadata, audio, device, return_char_alignments=False
         )
-    except Exception:
-        # L'alignement peut echouer sur certaines langues : on garde les segments bruts.
-        pass
+    except Exception as e:  # noqa: BLE001
+        # L'alignement peut echouer sur certaines langues : on garde les segments bruts, mais on
+        # trace (un echec systematique doit rester visible dans les logs, pas muet).
+        import sys as _sys
+
+        print(f"[engine] alignement ignore : {e}", file=_sys.stderr, flush=True)
 
     speakers: list[SpeakerInfo] = []
 
@@ -230,7 +264,12 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         speakers.append(SpeakerInfo(label=label, name=name, confidence=conf))
 
     # 5. Ecriture des sorties
-    os.makedirs(req.output_dir, exist_ok=True)
+    try:
+        os.makedirs(req.output_dir, exist_ok=True)
+    except OSError as e:
+        result.status = "error"
+        result.error = f"Impossible de creer le dossier de sortie ({req.output_dir}) : {e}"
+        return result
     # Defensif : on ne garde que le nom de fichier pour empecher qu'un base_name
     # du type "..\..\x" ne fasse ecrire hors de output_dir.
     base = os.path.join(req.output_dir, os.path.basename(req.base_name))
