@@ -41,6 +41,10 @@ public sealed class Worker : BackgroundService
     private bool _quietLogged;
     private bool _engineMissingLogged;
 
+    // Anti-spam : on ne loggue l'erreur "base de donnees indisponible" qu'une fois par version de
+    // config (sinon le message se repeterait a chaque tick tant que la base reste illisible).
+    private DateTime _dbErrorLoggedMtime;
+
     public Worker(
         ILogger<Worker> logger,
         TranscriptIndex index,
@@ -163,10 +167,33 @@ public sealed class Worker : BackgroundService
         _configMtime = mtime;
 
         _dataDir = ConfigStore.ExpandPath(_config.DataDir);
-        Directory.CreateDirectory(_dataDir);
         // Ces stores ouvrent une connexion SQLite par operation (using var c = Open()) et ne
         // conservent aucun handle persistant : rien a liberer avant de les recreer.
-        _jobs = new JobStore(Path.Combine(_dataDir, "jobs.db"));
+        try
+        {
+            Directory.CreateDirectory(_dataDir);
+            _jobs = new JobStore(Path.Combine(_dataDir, "jobs.db"));
+            _commands = new CommandStore(Path.Combine(_dataDir, "commands.db"));
+        }
+        catch (Exception ex)
+        {
+            // DataDir inaccessible, ou base verrouillee/corrompue : on ne peut pas traiter la file.
+            // On loggue UNE fois par version de config (anti-spam) et on reessaiera au prochain tick
+            // (un verrou transitoire — antivirus — finit par se liberer). Le service reste vivant.
+            _jobs = null;
+            _commands = null;
+            if (_dbErrorLoggedMtime != mtime)
+            {
+                _dbErrorLoggedMtime = mtime;
+                _logger.LogError(
+                    ex,
+                    "File indisponible : base de donnees inaccessible dans {Dir}.",
+                    _dataDir
+                );
+            }
+            return;
+        }
+
         // Garde anti-boucle : les jobs interrompus ne sont repris que sous le plafond de
         // tentatives ; au-dela ils sont abandonnes (Failed) au lieu d'etre re-enfiles a l'infini.
         var staleMax = Math.Max(1, _config.MaxAutoRetries);
@@ -177,7 +204,6 @@ public sealed class Worker : BackgroundService
                 recovered,
                 staleMax
             );
-        _commands = new CommandStore(Path.Combine(_dataDir, "commands.db"));
         _seen.Clear();
 
         _log = new EngineLogSink(Path.Combine(_dataDir, "logs"));
@@ -253,9 +279,14 @@ public sealed class Worker : BackgroundService
         foreach (var p in _config.Projects.Where(p => p.SpeakerIdentification != null))
             voicesDirNames.Add(p.SpeakerIdentification!.VoicesDirName);
 
-        foreach (
-            var file in Directory.EnumerateFiles(watchRoot, "*.*", SearchOption.AllDirectories)
-        )
+        // IgnoreInaccessible : un sous-dossier a ACL restrictives (partage reseau/OneDrive) ne doit
+        // pas interrompre tout le scan (sinon les fichiers situes apres ne sont jamais decouverts).
+        var enumOptions = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+        };
+        foreach (var file in Directory.EnumerateFiles(watchRoot, "*.*", enumOptions))
         {
             if (!extensions.Contains(Path.GetExtension(file)))
                 continue;
@@ -383,65 +414,91 @@ public sealed class Worker : BackgroundService
             _logger.LogInformation("Traitement : {File}", job.AudioPath);
             _log?.Write($"[job] debut : {job.AudioPath}");
 
-            var request = BuildRequest(job);
-
-            // CTS lie au worker + annulable par le drapeau d'annulation depose par la GUI.
-            using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            using var pollStop = new CancellationTokenSource();
-            var poller = WatchCancelAsync(cancelFlag, jobCts, pollStop.Token);
-
-            // Garde-fou anti-blocage : au-dela de N min sans aucune sortie du moteur, on le tue.
-            var inactivityTimeout =
-                _config.EngineInactivityTimeoutMinutes > 0
-                    ? TimeSpan.FromMinutes(_config.EngineInactivityTimeoutMinutes)
-                    : (TimeSpan?)null;
-
-            EngineResult result;
+            // BLINDAGE : chaque job est isole. Une exception imprevue (I/O, moteur, SQLite...) ne
+            // doit JAMAIS avorter le reste de la file ni laisser le job coince en Processing — on
+            // le marque Failed et on passe au suivant. Seul l'arret du worker (ct) rompt la boucle.
             try
             {
-                result = await _runner.RunAsync(
-                    request,
-                    line => _log?.Write(line),
-                    jobCts.Token,
-                    inactivityTimeout
-                );
-            }
-            finally
-            {
-                pollStop.Cancel();
-                await poller;
-            }
+                var request = BuildRequest(job);
 
-            if (result.Status == "cancelled")
+                // CTS lie au worker + annulable par le drapeau d'annulation depose par la GUI.
+                using var jobCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                using var pollStop = new CancellationTokenSource();
+                var poller = WatchCancelAsync(cancelFlag, jobCts, pollStop.Token);
+
+                // Garde-fou anti-blocage : au-dela de N min sans aucune sortie du moteur, on le tue.
+                var inactivityTimeout =
+                    _config.EngineInactivityTimeoutMinutes > 0
+                        ? TimeSpan.FromMinutes(_config.EngineInactivityTimeoutMinutes)
+                        : (TimeSpan?)null;
+
+                EngineResult result;
+                try
+                {
+                    result = await _runner.RunAsync(
+                        request,
+                        line => _log?.Write(line),
+                        jobCts.Token,
+                        inactivityTimeout
+                    );
+                }
+                finally
+                {
+                    pollStop.Cancel();
+                    await poller;
+                }
+
+                if (result.Status == "cancelled")
+                {
+                    _jobs.MarkFailed(job.Id, "Annule par l'utilisateur.");
+                    _logger.LogWarning("Annule : {File}", job.AudioPath);
+                    _log?.Write($"[job] annule : {job.AudioPath}");
+                    // Annulation explicite : on ne poursuit pas la file dans cette passe.
+                    break;
+                }
+
+                if (result.IsSuccess)
+                {
+                    _jobs.MarkDone(job.Id);
+                    _logger.LogInformation(
+                        "OK : {File} ({Segments} segments, {Speakers} locuteurs)",
+                        job.AudioPath,
+                        result.SegmentCount,
+                        result.SpeakerCount
+                    );
+                    _log?.Write(
+                        $"[job] termine : {job.AudioPath} ({result.SegmentCount} segments, {result.SpeakerCount} locuteurs)"
+                    );
+
+                    if (_config.SemanticEnabled && result.JsonPath is { } jp && File.Exists(jp))
+                        await VectorizeAsync(jp, ConfigStore.ExpandPath(_config.OutputRoot), ct);
+                }
+                else
+                {
+                    _jobs.MarkFailed(job.Id, result.Error ?? "erreur inconnue");
+                    _logger.LogError("Echec : {File} — {Error}", job.AudioPath, result.Error);
+                    _log?.Write($"[job] echec : {job.AudioPath} — {result.Error}");
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                _jobs.MarkFailed(job.Id, "Annule par l'utilisateur.");
-                _logger.LogWarning("Annule : {File}", job.AudioPath);
-                _log?.Write($"[job] annule : {job.AudioPath}");
-                // Annulation explicite : on ne poursuit pas la file dans cette passe.
+                // Arret du worker : on laisse le job en Processing (RequeueStale le reprendra,
+                // sous plafond, au redemarrage) et on sort proprement de la passe.
                 break;
             }
-
-            if (result.IsSuccess)
+            catch (Exception ex)
             {
-                _jobs.MarkDone(job.Id);
-                _logger.LogInformation(
-                    "OK : {File} ({Segments} segments, {Speakers} locuteurs)",
-                    job.AudioPath,
-                    result.SegmentCount,
-                    result.SpeakerCount
-                );
-                _log?.Write(
-                    $"[job] termine : {job.AudioPath} ({result.SegmentCount} segments, {result.SpeakerCount} locuteurs)"
-                );
-
-                if (_config.SemanticEnabled && result.JsonPath is { } jp && File.Exists(jp))
-                    await VectorizeAsync(jp, ConfigStore.ExpandPath(_config.OutputRoot), ct);
-            }
-            else
-            {
-                _jobs.MarkFailed(job.Id, result.Error ?? "erreur inconnue");
-                _logger.LogError("Echec : {File} — {Error}", job.AudioPath, result.Error);
-                _log?.Write($"[job] echec : {job.AudioPath} — {result.Error}");
+                // Filet ultime : le job fautif est marque Failed, la file continue.
+                try
+                {
+                    _jobs.MarkFailed(job.Id, "Erreur inattendue : " + ex.Message);
+                }
+                catch (Exception markEx)
+                {
+                    _logger.LogError(markEx, "Echec du MarkFailed pour {File}", job.AudioPath);
+                }
+                _logger.LogError(ex, "Echec inattendu : {File}", job.AudioPath);
+                _log?.Write($"[job] echec inattendu : {job.AudioPath} — {ex.Message}");
             }
         }
     }

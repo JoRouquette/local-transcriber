@@ -234,12 +234,17 @@ public sealed partial class ServiceViewModel : ObservableObject
     // ================= File : actions =================
 
     [RelayCommand]
-    private void ReprocessFile()
+    private async Task ReprocessFile()
     {
         if (SelectedJob is null)
+        {
+            _snackbar.Enqueue("Sélectionnez d'abord un fichier dans la liste.");
             return;
-        _settings.EnqueueCommand(CommandTypes.ReprocessFile, SelectedJob.AudioPath);
-        _snackbar.Enqueue($"Retraitement demandé : {Path.GetFileName(SelectedJob.AudioPath)}");
+        }
+        // Ecriture SQLite (commands.db) deportee : evite de figer l'UI si DataDir est lent/verrouille.
+        var path = SelectedJob.AudioPath;
+        await Task.Run(() => _settings.EnqueueCommand(CommandTypes.ReprocessFile, path));
+        _snackbar.Enqueue($"Retraitement demandé : {Path.GetFileName(path)}");
     }
 
     [RelayCommand]
@@ -264,19 +269,22 @@ public sealed partial class ServiceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void CancelCurrent()
+    private async Task CancelCurrent()
     {
         // On n'utilise PLUS le compteur ProcessingCount comme garde : il vient du resume DB
         // rafraichi toutes les 3 s, donc souvent perime — c'etait la cause de l'annulation
         // « aleatoire » (bouton refuse alors qu'un job tourne, ou flag pose trop tard). On depose
         // toujours le drapeau : le worker l'ignore s'il ne traite rien (et le nettoie au prochain
-        // passage), et l'honore immediatement si un job est en cours.
+        // passage), et l'honore immediatement si un job est en cours. Ecriture deportee (UI fluide).
         try
         {
             var dataDir = ConfigStore.ExpandPath(_settings.Config.DataDir);
             var flag = ControlSignals.CancelCurrentFlag(dataDir);
-            Directory.CreateDirectory(Path.GetDirectoryName(flag)!);
-            File.WriteAllText(flag, DateTime.UtcNow.ToString("o"));
+            await Task.Run(() =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(flag)!);
+                File.WriteAllText(flag, DateTime.UtcNow.ToString("o"));
+            });
             _snackbar.Enqueue("Annulation demandée — le traitement en cours va s'arrêter.");
         }
         catch (Exception ex)
@@ -286,16 +294,16 @@ public sealed partial class ServiceViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void RetryFailed()
+    private async Task RetryFailed()
     {
-        _settings.EnqueueCommand(CommandTypes.RetryFailed, "");
+        await Task.Run(() => _settings.EnqueueCommand(CommandTypes.RetryFailed, ""));
         _snackbar.Enqueue("Relance des fichiers en échec demandée.");
     }
 
     [RelayCommand]
-    private void UnblockStuck()
+    private async Task UnblockStuck()
     {
-        _settings.EnqueueCommand(CommandTypes.RequeueStale, "");
+        await Task.Run(() => _settings.EnqueueCommand(CommandTypes.RequeueStale, ""));
         _snackbar.Enqueue("Déblocage des traitements figés demandé.");
     }
 

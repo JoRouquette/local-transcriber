@@ -37,7 +37,19 @@ if (OperatingSystem.IsWindows())
 
 var config = ConfigStore.Load();
 var dataDir = ConfigStore.ExpandPath(config.DataDir);
-Directory.CreateDirectory(dataDir);
+try
+{
+    Directory.CreateDirectory(dataDir);
+}
+catch (Exception ex)
+{
+    // DataDir inaccessible (droits, chemin reseau indisponible au boot...) : on trace sur stderr
+    // AVANT la construction de l'hote (aucun logger/EventLog encore dispo) et on sort proprement.
+    Console.Error.WriteLine(
+        $"[worker] Dossier de donnees inaccessible ({dataDir}) : {ex.Message}. Arret."
+    );
+    return;
+}
 var indexDb = Path.Combine(dataDir, "index.db");
 
 // Un seul processus = un seul redacteur de l'index (FTS + vecteurs, meme base).

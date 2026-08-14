@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -104,14 +105,30 @@ public sealed partial class ProjectsViewModel : ObservableObject
     [RelayCommand]
     private void AddProject()
     {
-        var p = new ProjectConfig
+        // Nom/chemin uniques : deux ajouts sans renommage produiraient sinon deux entrees de meme
+        // RelativePath (identifiant de dossier cote backend) — ambiguite silencieuse.
+        var name = "Nouveau projet";
+        var rel = "NouveauProjet";
+        var i = 2;
+        while (
+            Projects.Any(p =>
+                string.Equals(p.RelativePath, rel, StringComparison.OrdinalIgnoreCase)
+            )
+        )
         {
-            Name = "Nouveau projet",
-            RelativePath = "NouveauProjet",
+            name = $"Nouveau projet {i}";
+            rel = $"NouveauProjet{i}";
+            i++;
+        }
+        var proj = new ProjectConfig
+        {
+            Name = name,
+            RelativePath = rel,
             Enabled = true,
         };
-        Projects.Add(p);
-        SelectedProject = p;
+        Projects.Add(proj);
+        SelectedProject = proj;
+        _settings.Save(); // coherent avec le reste de la page (persistance immediate)
     }
 
     [RelayCommand(CanExecute = nameof(CanRemove))]
@@ -128,6 +145,7 @@ public sealed partial class ProjectsViewModel : ObservableObject
         if (confirm != MessageBoxResult.Yes)
             return;
         Projects.Remove(SelectedProject);
+        _settings.Save(); // rend la suppression reellement definitive (coherent avec la confirmation)
     }
 
     private bool CanRemove() => SelectedProject != null;
@@ -238,6 +256,30 @@ public sealed partial class ProjectsViewModel : ObservableObject
             Threshold = ProjectThreshold,
             VoicesDirName = g.SpeakerIdentification.VoicesDirName,
         };
-        _settings.Save();
+        // Le modele est deja a jour en memoire (ci-dessus) ; on DEBOUNCE l'ecriture disque : faire
+        // glisser le slider « Seuil » declenchait sinon des dizaines de _settings.Save() en rafale.
+        DebouncedSave();
+    }
+
+    private CancellationTokenSource? _saveCts;
+
+    private void DebouncedSave()
+    {
+        _saveCts?.Cancel();
+        _saveCts = new CancellationTokenSource();
+        _ = SaveAfterDelayAsync(_saveCts.Token);
+    }
+
+    private async Task SaveAfterDelayAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(400, token);
+            if (!token.IsCancellationRequested)
+                _settings.Save();
+        }
+        catch (OperationCanceledException)
+        { /* remplace par une sauvegarde plus recente : rien a faire */
+        }
     }
 }

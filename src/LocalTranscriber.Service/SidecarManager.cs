@@ -18,7 +18,22 @@ public sealed class SidecarManager : IDisposable
 
     public SidecarManager(ILogger logger) => _logger = logger;
 
-    public bool IsRunning => _proc is { HasExited: false };
+    // Defensif : HasExited leve InvalidOperationException si le process n'a jamais demarre
+    // (ex. Start() a echoue) ou a ete dispose. On ne doit jamais laisser cette exception remonter.
+    public bool IsRunning
+    {
+        get
+        {
+            try
+            {
+                return _proc is { HasExited: false };
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     public async Task EnsureStartedAsync(
         string enginePath,
@@ -30,6 +45,18 @@ public sealed class SidecarManager : IDisposable
     {
         if (IsRunning)
             return;
+
+        // Un sidecar orphelin (worker precedent tue sans /T) peut deja tenir le port : on le
+        // reutilise au lieu d'echouer a rebinder. Le client embeddings s'y connectera normalement.
+        if (await CanConnectAsync(port, ct))
+        {
+            _logger.LogInformation(
+                "Sidecar embeddings deja a l'ecoute sur le port {Port} : reutilisation.",
+                port
+            );
+            return;
+        }
+
         if (!File.Exists(enginePath))
         {
             _logger.LogWarning(
@@ -76,9 +103,27 @@ public sealed class SidecarManager : IDisposable
             _logger.LogDebug("[embeddings] {Line}", e.Data);
             OnLog?.Invoke("[embeddings] " + e.Data);
         };
-        _proc.Start();
-        _proc.BeginOutputReadLine();
-        _proc.BeginErrorReadLine();
+        try
+        {
+            _proc.Start();
+            _proc.BeginOutputReadLine();
+            _proc.BeginErrorReadLine();
+        }
+        catch (Exception ex)
+        {
+            // Echec de demarrage (permissions, EXE bloque par un EDR...) : on remet _proc a null
+            // pour ne pas laisser un objet "jamais demarre" qui ferait lever IsRunning en boucle.
+            _logger.LogError(ex, "Echec du demarrage du sidecar embeddings.");
+            try
+            {
+                _proc?.Dispose();
+            }
+            catch
+            { /* best effort */
+            }
+            _proc = null;
+            return;
+        }
         _logger.LogInformation(
             "Sidecar embeddings demarre (port {Port}), chargement du modele...",
             port

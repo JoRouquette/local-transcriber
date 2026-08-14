@@ -25,35 +25,69 @@ public sealed class TranscriptTools
     private static string Json(object value) =>
         JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true });
 
+    private static string Error(string message, Exception ex) =>
+        Json(new { error = message, detail = ex.Message });
+
     [McpServerTool(Name = "list_projects")]
     [Description("Liste les projets pour lesquels des transcriptions existent.")]
-    public string ListProjects() => Json(_index.ListProjects());
+    public string ListProjects()
+    {
+        // Entree non fiable / base potentiellement verrouillee : on renvoie une erreur JSON propre
+        // plutot que laisser une SqliteException remonter brute au client MCP.
+        try
+        {
+            return Json(_index.ListProjects());
+        }
+        catch (Exception ex)
+        {
+            return Error("Lecture des projets impossible.", ex);
+        }
+    }
 
     [McpServerTool(Name = "list_transcripts")]
     [Description("Liste les transcriptions disponibles, optionnellement filtrees par projet.")]
     public string ListTranscripts(
         [Description("Nom du projet (optionnel).")] string? project = null,
         [Description("Nombre maximum de resultats (defaut 100).")] int limit = 100
-    ) =>
-        Json(
-            _index
-                .ListDocuments(project, limit)
-                .Select(d => new
-                {
-                    d.Project,
-                    d.BaseName,
-                    d.Language,
-                    d.DurationSeconds,
-                    d.Speakers,
-                    d.TranscribedAt,
-                    d.Path,
-                })
-        );
+    )
+    {
+        try
+        {
+            limit = Math.Clamp(limit, 1, 500); // borne haute : evite une reponse JSON gigantesque
+            return Json(
+                _index
+                    .ListDocuments(project, limit)
+                    .Select(d => new
+                    {
+                        d.Project,
+                        d.BaseName,
+                        d.Language,
+                        d.DurationSeconds,
+                        d.Speakers,
+                        d.TranscribedAt,
+                        d.Path,
+                    })
+            );
+        }
+        catch (Exception ex)
+        {
+            return Error("Lecture des transcriptions impossible.", ex);
+        }
+    }
 
     [McpServerTool(Name = "get_speakers")]
     [Description("Liste les locuteurs identifies, optionnellement pour un projet donne.")]
-    public string GetSpeakers([Description("Nom du projet (optionnel).")] string? project = null) =>
-        Json(_index.ListSpeakers(project));
+    public string GetSpeakers([Description("Nom du projet (optionnel).")] string? project = null)
+    {
+        try
+        {
+            return Json(_index.ListSpeakers(project));
+        }
+        catch (Exception ex)
+        {
+            return Error("Lecture des locuteurs impossible.", ex);
+        }
+    }
 
     [McpServerTool(Name = "search_transcripts")]
     [Description(
@@ -68,25 +102,33 @@ public sealed class TranscriptTools
         CancellationToken ct = default
     )
     {
-        var parsed = mode?.ToLowerInvariant() switch
+        try
         {
-            "semantic" => SearchMode.Semantic,
-            "keyword" => SearchMode.Keyword,
-            _ => SearchMode.Hybrid,
-        };
-        var results = await _search.SearchAsync(query, parsed, project, speaker, limit, ct);
-        return Json(
-            results.Select(r => new
+            var parsed = mode?.ToLowerInvariant() switch
             {
-                r.Project,
-                r.BaseName,
-                r.Speakers,
-                r.Snippet,
-                r.Score,
-                r.Mode,
-                r.Path,
-            })
-        );
+                "semantic" => SearchMode.Semantic,
+                "keyword" => SearchMode.Keyword,
+                _ => SearchMode.Hybrid,
+            };
+            limit = Math.Clamp(limit, 1, 500);
+            var results = await _search.SearchAsync(query, parsed, project, speaker, limit, ct);
+            return Json(
+                results.Select(r => new
+                {
+                    r.Project,
+                    r.BaseName,
+                    r.Speakers,
+                    r.Snippet,
+                    r.Score,
+                    r.Mode,
+                    r.Path,
+                })
+            );
+        }
+        catch (Exception ex)
+        {
+            return Error("Recherche impossible.", ex);
+        }
     }
 
     [McpServerTool(Name = "get_transcript")]
@@ -123,15 +165,19 @@ public sealed class TranscriptTools
                     )
                     .ToList();
 
-            var page = turns.Skip(Math.Max(0, offset)).Take(Math.Max(1, limit)).ToList();
-            int? next = offset + page.Count < turns.Count ? offset + page.Count : null;
+            // Offset/limit bornes AVANT calcul de la pagination : un offset negatif ou un limit
+            // aberrant produisait un next_offset incoherent (pagination cassee cote client).
+            var start = Math.Max(0, offset);
+            limit = Math.Clamp(limit, 1, 500);
+            var page = turns.Skip(start).Take(limit).ToList();
+            int? next = start + page.Count < turns.Count ? start + page.Count : null;
 
             return Json(
                 new
                 {
                     path = resolved,
                     total_turns = turns.Count,
-                    offset,
+                    offset = start,
                     next_offset = next,
                     turns = page.Select(t => new
                     {

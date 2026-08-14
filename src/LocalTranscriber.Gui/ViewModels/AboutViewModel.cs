@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using LocalTranscriber.Gui.Services;
@@ -113,10 +114,23 @@ public sealed partial class AboutViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void InstallUpdate()
+    private async Task InstallUpdate()
     {
-        if (UpdateReady)
-            _updates.ApplyAndRestart();
+        if (!UpdateReady)
+            return;
+        // Action lourde et irreversible (arret du worker jusqu'a 10 s, puis redemarrage) : on
+        // confirme, et on execute hors thread UI pour ne pas figer la fenetre pendant l'arret.
+        var confirm = MessageBox.Show(
+            "Installer la mise à jour et redémarrer maintenant ?\n\n"
+                + "Les modifications non enregistrées seront perdues.",
+            "Mise à jour",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question
+        );
+        if (confirm != MessageBoxResult.Yes)
+            return;
+        _snackbar.Enqueue("Installation de la mise à jour…");
+        await Task.Run(_updates.ApplyAndRestart);
     }
 
     [RelayCommand]

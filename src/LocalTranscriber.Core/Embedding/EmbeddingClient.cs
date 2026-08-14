@@ -67,6 +67,11 @@ public sealed class EmbeddingClient
         return resp.IsSuccess ? resp.Vectors[0] : null;
     }
 
+    // Plafond de securite : une reponse d'embeddings normale fait quelques dizaines de Ko ; au-dela
+    // de 64 Mo on considere que le sidecar est buggé/hostile et on coupe (evite une croissance
+    // memoire non bornee pendant toute la fenetre de timeout si aucun '\n' n'arrive).
+    private const int MaxResponseBytes = 64 * 1024 * 1024;
+
     private static async Task<string> ReadLineAsync(NetworkStream stream, CancellationToken ct)
     {
         var buffer = new byte[4096];
@@ -86,6 +91,10 @@ public sealed class EmbeddingClient
                 break;
             }
             bytes.AddRange(buffer[..read]);
+            if (bytes.Count > MaxResponseBytes)
+                throw new InvalidOperationException(
+                    "Reponse du sidecar embeddings trop volumineuse (plafond depasse)."
+                );
         }
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
