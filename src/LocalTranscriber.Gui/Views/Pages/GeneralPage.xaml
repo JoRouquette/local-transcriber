@@ -93,6 +93,14 @@
             </TextBlock.Style>
           </TextBlock>
 
+          <TextBlock
+            Text="Changer le dossier de sortie nécessite un redémarrage du worker (onglet « Traitements et fichiers ») pour être pris en compte."
+            TextWrapping="Wrap"
+            FontSize="11"
+            Margin="0,4,0,0"
+            Foreground="{DynamicResource MaterialDesignBodyLight}"
+          />
+
           <TextBox
             Style="{StaticResource MaterialDesignFloatingHintTextBox}"
             materialDesign:HintAssist.Hint="Cache des modèles"
