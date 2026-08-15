@@ -105,8 +105,26 @@ transcriptions.
   transcrit (l'index est alimenté par les sorties du worker) et que le dossier de sortie est
   bien celui configuré.
 
+## Authentification par jeton (optionnelle, machine multi-comptes)
+
+Par défaut, le serveur MCP n'exige pas de jeton : la restriction à `127.0.0.1` suffit sur une
+machine mono-utilisateur. Sur une **machine partagée** (plusieurs comptes Windows), un autre
+utilisateur pourrait toutefois interroger `127.0.0.1:8765` et lire vos transcriptions. Vous
+pouvez alors exiger un **jeton d'accès local** :
+
+1. Dans la configuration de l'app (`config.json`), passez `mcp_require_token` à `true`, puis
+   redémarrez le service (onglet **Traitements et fichiers** → **Redémarrer**).
+2. Dans l'onglet **À propos**, la ligne « Endpoint MCP » affiche désormais l'URL **avec le
+   jeton** (`http://127.0.0.1:8765/mcp?token=…`). C'est cette URL complète qu'il faut reporter
+   dans `claude_desktop_config.json` (à la place de l'URL sans jeton), puis redémarrer Claude
+   Desktop complètement.
+
+Le jeton peut aussi être fourni via l'en-tête `Authorization: Bearer <jeton>` si votre client
+le permet. Sans jeton (ou avec un jeton erroné), le serveur répond `401`.
+
 ## Notes de sécurité
 
 Le serveur MCP écoute exclusivement sur `127.0.0.1` (boucle locale) : il n'est pas accessible
 depuis le réseau. Tout reste sur votre machine ; aucune donnée n'est envoyée à l'extérieur par
-LocalTranscriber.
+LocalTranscriber. Le jeton d'accès (voir ci-dessus) est stocké sous votre profil utilisateur
+(`%LOCALAPPDATA%`), lisible par vous seul.

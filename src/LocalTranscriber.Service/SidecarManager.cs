@@ -40,6 +40,7 @@ public sealed class SidecarManager : IDisposable
         int port,
         string cacheDir,
         string device,
+        string? authToken,
         CancellationToken ct
     )
     {
@@ -83,6 +84,13 @@ public sealed class SidecarManager : IDisposable
         {
             psi.ArgumentList.Add("--cache-dir");
             psi.ArgumentList.Add(cacheDir);
+        }
+        if (!string.IsNullOrWhiteSpace(authToken))
+        {
+            // Jeton passe en argument (visible seulement par le proprietaire du process) : le
+            // sidecar refusera toute requete loopback sans ce jeton.
+            psi.ArgumentList.Add("--auth-token");
+            psi.ArgumentList.Add(authToken);
         }
 
         // Libere l'ancienne instance (processus deja sorti) avant de reaffecter, pour ne pas

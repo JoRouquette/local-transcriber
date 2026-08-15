@@ -14,12 +14,19 @@ public sealed class EmbeddingClient
     private readonly string _host;
     private readonly int _port;
     private readonly int _timeoutMs;
+    private readonly string? _token;
 
-    public EmbeddingClient(int port, string host = "127.0.0.1", int timeoutMs = 30000)
+    public EmbeddingClient(
+        int port,
+        string? authToken = null,
+        string host = "127.0.0.1",
+        int timeoutMs = 30000
+    )
     {
         _host = host;
         _port = port;
         _timeoutMs = timeoutMs;
+        _token = authToken;
     }
 
     public async Task<EmbedResponse> EmbedAsync(
@@ -28,7 +35,12 @@ public sealed class EmbeddingClient
         CancellationToken ct = default
     )
     {
-        var request = new EmbedRequest { Texts = texts.ToList(), Kind = kind };
+        var request = new EmbedRequest
+        {
+            Texts = texts.ToList(),
+            Kind = kind,
+            Token = _token,
+        };
         try
         {
             using var client = new TcpClient();

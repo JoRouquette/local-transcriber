@@ -14,6 +14,8 @@
   "engine_inactivity_timeout_minutes": 20,
   "max_audio_minutes": 480,
   "mcp_port": 8765,
+  "_comment_mcp_require_token": "true = le MCP exige un jeton d'acces local (protege sur machine multi-comptes). Apres activation, reportez l'URL tokenisee affichee dans l'onglet 'A propos' dans claude_desktop_config.json, puis redemarrez le service et Claude Desktop.",
+  "mcp_require_token": false,
   "semantic_enabled": true,
   "embedding_sidecar_port": 8766,
   "embedding_model": "intfloat/multilingual-e5-small",

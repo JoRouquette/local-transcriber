@@ -152,6 +152,15 @@ public sealed class AppConfig
 
     // ---- Serveur MCP (HTTP local) et recherche semantique ----
     public int McpPort { get; set; } = 8765;
+
+    /// <summary>
+    /// Exige un jeton d'acces local sur le serveur MCP (en plus de la restriction loopback). Utile
+    /// sur une machine multi-comptes : sans le jeton, un autre utilisateur pourrait interroger le
+    /// MCP sur 127.0.0.1 et lire les transcriptions. Desactive par defaut pour ne pas casser une
+    /// config Claude Desktop existante : quand on l'active, il faut reporter l'URL tokenisee
+    /// (onglet A propos) dans claude_desktop_config.json. Lu au demarrage (redemarrage requis).
+    /// </summary>
+    public bool McpRequireToken { get; set; } = false;
     public bool SemanticEnabled { get; set; } = true;
     public int EmbeddingSidecarPort { get; set; } = 8766;
     public string EmbeddingModel { get; set; } = "intfloat/multilingual-e5-small";

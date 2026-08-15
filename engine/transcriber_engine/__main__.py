@@ -64,6 +64,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default=None, help="Modele d'embedding (defaut e5-small).")
     parser.add_argument("--device", default="cpu", help="cpu | cuda pour le sidecar d'embeddings.")
     parser.add_argument("--cache-dir", default=None, help="Cache des modeles (embeddings).")
+    parser.add_argument(
+        "--auth-token",
+        default=None,
+        help="Jeton d'acces local exige par le sidecar d'embeddings (facultatif).",
+    )
     args = parser.parse_args(argv)
 
     if args.version:
@@ -74,7 +79,9 @@ def main(argv: list[str] | None = None) -> int:
         from .embeddings import DEFAULT_MODEL
         from .serve import serve
 
-        return serve(args.port, args.model or DEFAULT_MODEL, args.cache_dir, args.device)
+        return serve(
+            args.port, args.model or DEFAULT_MODEL, args.cache_dir, args.device, args.auth_token
+        )
 
     # Charge le token HF depuis .env si present, sinon variable d'environnement.
     try:

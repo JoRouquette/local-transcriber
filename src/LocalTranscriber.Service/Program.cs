@@ -2,6 +2,7 @@ using System.Threading;
 using LocalTranscriber.Core.Configuration;
 using LocalTranscriber.Core.Embedding;
 using LocalTranscriber.Core.Search;
+using LocalTranscriber.Core.Security;
 using LocalTranscriber.Mcp.Resources;
 using LocalTranscriber.Mcp.Tools;
 using LocalTranscriber.Service;
@@ -55,7 +56,12 @@ var indexDb = Path.Combine(dataDir, "index.db");
 // Un seul processus = un seul redacteur de l'index (FTS + vecteurs, meme base).
 builder.Services.AddSingleton(new TranscriptIndex(indexDb));
 builder.Services.AddSingleton(new VectorStore(indexDb));
-builder.Services.AddSingleton(new EmbeddingClient(config.EmbeddingSidecarPort));
+
+// Jeton d'acces local partage : le worker demarre le sidecar avec ce meme jeton, donc le client
+// doit le presenter a chaque requete (le sidecar refuse sinon).
+builder.Services.AddSingleton(
+    new EmbeddingClient(config.EmbeddingSidecarPort, AccessToken.GetOrCreate())
+);
 builder.Services.AddSingleton(sp => new HybridSearch(
     sp.GetRequiredService<TranscriptIndex>(),
     sp.GetRequiredService<VectorStore>(),
@@ -93,6 +99,13 @@ static bool IsLoopbackHost(string? host)
         || host.Equals("::1", StringComparison.OrdinalIgnoreCase);
 }
 
+// Auth MCP optionnelle (opt-in) : en plus du loopback, on peut exiger un jeton d'acces local.
+// Utile sur une machine multi-comptes (un autre utilisateur ne pourrait pas lire les
+// transcriptions via 127.0.0.1). Desactive par defaut pour ne pas casser une config existante.
+// Lu au demarrage (un changement de McpRequireToken impose un redemarrage du service).
+var mcpRequireToken = config.McpRequireToken;
+var mcpAccessToken = mcpRequireToken ? AccessToken.GetOrCreate() : null;
+
 app.Use(
     async (context, next) =>
     {
@@ -114,6 +127,24 @@ app.Use(
             )
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return;
+            }
+        }
+
+        // Jeton : accepte via ?token=... (URL, compatible client `url` et pont mcp-remote) ou
+        // via l'en-tete Authorization: Bearer <jeton>. Comparaison a temps constant.
+        if (mcpRequireToken)
+        {
+            var provided = context.Request.Query["token"].ToString();
+            if (string.IsNullOrEmpty(provided))
+            {
+                var auth = context.Request.Headers.Authorization.ToString();
+                if (auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    provided = auth["Bearer ".Length..].Trim();
+            }
+            if (!AccessToken.Matches(provided, mcpAccessToken))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return;
             }
         }

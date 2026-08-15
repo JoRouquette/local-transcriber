@@ -22,7 +22,20 @@ def _eprint(*args: object) -> None:
     print(*args, file=sys.stderr, flush=True)
 
 
-def serve(port: int, model_name: str, cache_dir: Optional[str], device: str = "cpu") -> int:
+def _token_eq(a: str, b: str) -> bool:
+    """Comparaison a temps constant (evite une fuite par timing)."""
+    import hmac
+
+    return hmac.compare_digest(a, b)
+
+
+def serve(
+    port: int,
+    model_name: str,
+    cache_dir: Optional[str],
+    device: str = "cpu",
+    auth_token: Optional[str] = None,
+) -> int:
     _eprint(f"[embeddings] chargement du modele {model_name} ({device})...")
     embedder = Embedder(model_name, cache_dir, device)
     _eprint(f"[embeddings] pret (dim={embedder.dim})")
@@ -51,7 +64,7 @@ def serve(port: int, model_name: str, cache_dir: Optional[str], device: str = "c
                         else:
                             if not line:
                                 continue
-                            resp = _handle(embedder, line)
+                            resp = _handle(embedder, line, auth_token)
                         stream.write((json.dumps(resp) + "\n").encode("utf-8"))
                     except (
                         BrokenPipeError,
@@ -74,9 +87,15 @@ _MAX_TEXTS = 512
 _MAX_TOTAL_CHARS = 2_000_000
 
 
-def _handle(embedder: Embedder, line: str) -> dict:
+def _handle(embedder: Embedder, line: str, auth_token: Optional[str] = None) -> dict:
     try:
         req = json.loads(line)
+        # Auth loopback : si le sidecar a ete demarre avec un jeton, toute requete doit le
+        # presenter (le worker le fait). Sans jeton cote serveur -> pas de verification.
+        if auth_token:
+            provided = req.get("token")
+            if not isinstance(provided, str) or not _token_eq(provided, auth_token):
+                return {"error": "unauthorized"}
         texts = req.get("texts", [])
         if not isinstance(texts, list):
             return {"error": "texts must be a list"}

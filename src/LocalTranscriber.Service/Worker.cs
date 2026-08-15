@@ -5,6 +5,7 @@ using LocalTranscriber.Core.Engine;
 using LocalTranscriber.Core.Jobs;
 using LocalTranscriber.Core.Paths;
 using LocalTranscriber.Core.Search;
+using LocalTranscriber.Core.Security;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -37,6 +38,9 @@ public sealed class Worker : BackgroundService
     );
     private EngineSetup _engineSetup = new();
     private string _dataDir = "";
+
+    // Jeton d'acces local (partage worker/sidecar/MCP). Stable pour tout le cycle de vie.
+    private readonly string _authToken = AccessToken.GetOrCreate();
     private EngineLogSink? _log;
     private bool _quietLogged;
     private bool _engineMissingLogged;
@@ -127,6 +131,7 @@ public sealed class Worker : BackgroundService
                             _config.EmbeddingSidecarPort,
                             ConfigStore.ExpandPath(_config.ModelCacheDir),
                             _config.EmbeddingDevice,
+                            _authToken,
                             stoppingToken
                         );
 
