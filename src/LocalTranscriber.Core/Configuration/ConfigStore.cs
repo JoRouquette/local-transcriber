@@ -98,9 +98,10 @@ public static class ConfigStore
     }
 
     /// <summary>
-    /// Superpose les secrets de config.local.json (actuellement : hf_token). Cherche le
-    /// fichier a cote du config, puis dans le repertoire courant, puis a cote de l'exe —
-    /// ce qui couvre l'app installee comme l'execution en dev depuis le depot.
+    /// Superpose les secrets de config.local.json (hf_token). Le token est stocke CHIFFRE
+    /// (DPAPI CurrentUser, champ <c>hf_token_enc</c>) ; on tolere l'ancien format en clair
+    /// (<c>hf_token</c>) pour la migration — il sera reecrit chiffre au prochain Save. Cherche
+    /// le fichier a cote du config, puis dans le repertoire courant, puis a cote de l'exe.
     /// </summary>
     private static void ApplyLocalOverlay(AppConfig config, string mainPath)
     {
@@ -111,12 +112,19 @@ public static class ConfigStore
                 continue;
             try
             {
-                var overlay = JsonSerializer.Deserialize<AppConfig>(
+                var overlay = JsonSerializer.Deserialize<LocalSecrets>(
                     File.ReadAllText(local),
                     JsonDefaults.Options
                 );
-                if (overlay is not null && !string.IsNullOrWhiteSpace(overlay.HfToken))
-                    config.HfToken = overlay.HfToken;
+                if (overlay is not null)
+                {
+                    // Priorite au chiffre ; repli sur l'ancien clair (migration transparente).
+                    var token = SecretProtector.Unprotect(overlay.HfTokenEnc);
+                    if (string.IsNullOrWhiteSpace(token))
+                        token = overlay.HfToken;
+                    if (!string.IsNullOrWhiteSpace(token))
+                        config.HfToken = token;
+                }
             }
             catch
             { /* fichier local invalide : on ignore */
@@ -155,10 +163,22 @@ public static class ConfigStore
 
         var localPath = Path.Combine(dir, LocalFileName);
         if (!string.IsNullOrWhiteSpace(token))
-            WriteAtomic(
-                localPath,
-                JsonSerializer.Serialize(new LocalSecrets { HfToken = token }, JsonDefaults.Options)
-            );
+        {
+            // Chiffrement au repos (DPAPI CurrentUser). Si le chiffrement echoue (contexte sans
+            // DPAPI, tres improbable sous Windows), on ne perd pas le token : repli en clair avec
+            // avertissement, plutot que de casser la diarisation.
+            var enc = SecretProtector.Protect(token);
+            var secrets = enc is not null
+                ? new LocalSecrets { HfTokenEnc = enc }
+                : new LocalSecrets { HfToken = token };
+            if (enc is null)
+                Console.Error.WriteLine(
+                    "[config] Chiffrement DPAPI indisponible : le token HF est stocke en clair dans "
+                        + LocalFileName
+                        + "."
+                );
+            WriteAtomic(localPath, JsonSerializer.Serialize(secrets, JsonDefaults.Options));
+        }
         else if (File.Exists(localPath))
             // Plus de token : on retire le fichier de secrets plutot que de laisser un secret perime.
             File.Delete(localPath);
@@ -174,6 +194,10 @@ public static class ConfigStore
 
     private sealed class LocalSecrets
     {
+        /// <summary>Ancien format : token en clair. Conserve en lecture pour la migration.</summary>
         public string? HfToken { get; set; }
+
+        /// <summary>Format courant : token chiffre DPAPI (base64), champ JSON <c>hf_token_enc</c>.</summary>
+        public string? HfTokenEnc { get; set; }
     }
 }
