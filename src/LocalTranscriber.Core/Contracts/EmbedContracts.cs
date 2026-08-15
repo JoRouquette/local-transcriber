@@ -10,6 +10,10 @@ public sealed class EmbedRequest
 
     /// <summary>"query" (question) ou "passage" (document a indexer).</summary>
     public string Kind { get; set; } = "passage";
+
+    /// <summary>Jeton d'acces local (le worker et le sidecar partagent le meme). Facultatif : si
+    /// le sidecar a ete demarre sans jeton, il ne le verifie pas.</summary>
+    public string? Token { get; set; }
 }
 
 public sealed class EmbedResponse

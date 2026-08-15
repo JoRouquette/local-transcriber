@@ -10,6 +10,22 @@ from .device import resolve_compute_type, resolve_device
 from .models import EngineRequest, EngineResult, SpeakerInfo
 
 
+def _probe_duration_seconds(path: str) -> Optional[float]:
+    """Sonde legere de la duree audio (lecture d'en-tete via PyAV, sans decoder tout le flux)."""
+    try:
+        import av  # dependance de faster-whisper
+
+        with av.open(path) as container:
+            if container.duration is not None:
+                return float(container.duration) / 1_000_000.0  # AV_TIME_BASE = 1e6 us
+            for stream in container.streams:
+                if stream.duration is not None and stream.time_base is not None:
+                    return float(stream.duration * stream.time_base)
+    except Exception:
+        return None
+    return None
+
+
 def _load_diarization_pipeline(hf_token: Optional[str], device: str):
     """Charge le pipeline de diarisation en tolerant les evolutions d'API de whisperx."""
     import torch
@@ -29,15 +45,35 @@ def _load_diarization_pipeline(hf_token: Optional[str], device: str):
             "Acceptez-les (une fois) sur https://hf.co/pyannote/speaker-diarization-3.1 et "
             "https://hf.co/pyannote/segmentation-3.0, puis reessayez."
         ) from e
+    except Exception as e:  # noqa: BLE001
+        # On distingue un echec reseau (telechargement du modele pyannote) d'un autre echec
+        # de chargement, pour un message actionnable cote utilisateur.
+        msg = str(e).lower()
+        network = ("connection", "timed out", "timeout", "network", "resolve", "getaddr",
+                   "temporarily", "ssl", "max retries", "connexion")
+        if any(tok in msg for tok in network):
+            raise RuntimeError(
+                "Diarisation indisponible : echec reseau lors du telechargement du modele "
+                "pyannote. Verifiez la connexion internet, puis reessayez."
+            ) from e
+        raise RuntimeError(
+            f"Diarisation indisponible : echec du chargement du modele pyannote ({e})."
+        ) from e
 
 
 def _normalize_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for seg in segments:
+        start = float(seg.get("start") or 0.0)
+        end = float(seg.get("end") or 0.0)
+        # Garantit end >= start : un segment mal aligne a duree negative casserait certains
+        # lecteurs SRT et l'ordre d'affichage.
+        if end < start:
+            end = start
         out.append(
             {
-                "start": float(seg.get("start") or 0.0),
-                "end": float(seg.get("end") or 0.0),
+                "start": start,
+                "end": end,
                 "text": (seg.get("text") or "").strip(),
                 "speaker_label": seg.get("speaker") or "SPEAKER_?",
                 "speaker_name": None,
@@ -60,17 +96,73 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
 
     result = EngineResult(audio_path=req.audio_path, engine_version=__version__)
 
+    # Bornage defensif : une requete malformee ne doit pas produire un comportement aberrant
+    # (chunk_minutes<=0 -> sur-decoupage en micro-chunks ; min>max transmis a pyannote ; seuil
+    # hors [0,1]).
+    if req.chunk_minutes < 1:
+        req.chunk_minutes = 1
+    if req.chunk_threshold_minutes < 1:
+        req.chunk_threshold_minutes = 1
+    if req.batch_size < 1:
+        req.batch_size = 1
+    req.speaker_id_threshold = min(1.0, max(0.0, float(req.speaker_id_threshold)))
+    if (
+        req.min_speakers is not None
+        and req.max_speakers is not None
+        and req.min_speakers > req.max_speakers
+    ):
+        req.min_speakers, req.max_speakers = req.max_speakers, req.min_speakers
+
     device = resolve_device(req.device)
     compute_type = resolve_compute_type(req.compute_type, device)
     cache = req.model_cache_dir or None
 
     # 1. Transcription
-    audio = whisperx.load_audio(req.audio_path)
+    # Garde-fou memoire : on refuse d'emblee un fichier trop long AVANT de charger tout l'audio
+    # en RAM (whisperx.load_audio decode le flux entier en float32 16 kHz), via une sonde legere.
+    max_minutes = getattr(req, "max_audio_minutes", 0) or 0
+    if max_minutes > 0:
+        probed = _probe_duration_seconds(req.audio_path)
+        if probed is not None and probed > max_minutes * 60.0:
+            result.status = "error"
+            result.duration_seconds = probed
+            result.error = (
+                f"Fichier trop long ({probed / 60:.0f} min > limite {max_minutes} min). "
+                "Augmentez max_audio_minutes ou decoupez le fichier."
+            )
+            return result
+
+    try:
+        audio = whisperx.load_audio(req.audio_path)
+    except Exception as e:  # noqa: BLE001
+        result.status = "error"
+        result.error = (
+            f"Fichier audio illisible ou format non supporte : "
+            f"{os.path.basename(req.audio_path)} ({e})"
+        )
+        return result
     duration = len(audio) / 16000.0
+
+    # Fichier vide/silencieux : inutile d'engager le modele, message clair.
+    if duration <= 0.0 or len(audio) == 0:
+        result.status = "error"
+        result.error = (
+            f"Fichier audio vide ou sans piste exploitable : {os.path.basename(req.audio_path)}."
+        )
+        return result
     lang = None if req.language == "auto" else req.language
     model = whisperx.load_model(
         req.model_size, device, compute_type=compute_type, language=lang, download_root=cache
     )
+    # Sur CPU, un batch_size eleve consomme beaucoup de RAM (cause de « mkl_malloc: failed to
+    # allocate memory ») pour un gain de vitesse faible : on le plafonne. On raccourcit aussi la
+    # taille de chunk pour reduire le pic memoire par appel de transcription.
+    effective_batch = req.batch_size
+    chunk_target = float(req.chunk_minutes) * 60.0
+    if device == "cpu":
+        effective_batch = max(1, min(req.batch_size, 4))
+        chunk_target = min(chunk_target, 300.0)  # 5 min max par chunk sur CPU
+
     threshold_seconds = float(getattr(req, "chunk_threshold_minutes", 20)) * 60.0
     if getattr(req, "chunking_enabled", False) and duration > threshold_seconds:
         import sys as _sys
@@ -80,14 +172,14 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         tr = chunking.chunked_transcribe(
             model,
             audio,
-            batch_size=req.batch_size,
+            batch_size=effective_batch,
             language=lang,
-            target_seconds=float(req.chunk_minutes) * 60.0,
+            target_seconds=chunk_target,
             min_silence_seconds=float(req.chunk_min_silence_seconds),
             log=lambda m: print(m, file=_sys.stderr, flush=True),
         )
     else:
-        tr = model.transcribe(audio, batch_size=req.batch_size, language=lang)
+        tr = model.transcribe(audio, batch_size=effective_batch, language=lang)
     detected_lang = tr.get("language", req.language)
 
     # 2. Alignement (timestamps au mot)
@@ -98,9 +190,12 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         tr = whisperx.align(
             tr["segments"], model_a, metadata, audio, device, return_char_alignments=False
         )
-    except Exception:
-        # L'alignement peut echouer sur certaines langues : on garde les segments bruts.
-        pass
+    except Exception as e:  # noqa: BLE001
+        # L'alignement peut echouer sur certaines langues : on garde les segments bruts, mais on
+        # trace (un echec systematique doit rester visible dans les logs, pas muet).
+        import sys as _sys
+
+        print(f"[engine] alignement ignore : {e}", file=_sys.stderr, flush=True)
 
     speakers: list[SpeakerInfo] = []
 
@@ -125,6 +220,18 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
 
     segments = _normalize_segments(tr.get("segments", []))
     spans = _speaker_spans(segments)
+
+    # Diagnostic diarisation : combien de clusters et quelle duree de parole chacun. Permet de
+    # distinguer une erreur de diarisation (mauvais clusters) d'une erreur d'identification (mauvais
+    # nom colle sur un bon cluster) en lisant simplement les logs du traitement.
+    if req.diarization_enabled and spans:
+        import sys as _sys
+
+        diag = ", ".join(
+            f"{lbl}={sum(e - s for s, e in sp):.0f}s"
+            for lbl, sp in sorted(spans.items())
+        )
+        print(f"[engine] diarisation : {len(spans)} cluster(s) -> {diag}", file=_sys.stderr, flush=True)
 
     # 4. Identification par snippets de voix (optionnelle)
     id_map: dict[str, tuple[str, float]] = {}
@@ -157,7 +264,12 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         speakers.append(SpeakerInfo(label=label, name=name, confidence=conf))
 
     # 5. Ecriture des sorties
-    os.makedirs(req.output_dir, exist_ok=True)
+    try:
+        os.makedirs(req.output_dir, exist_ok=True)
+    except OSError as e:
+        result.status = "error"
+        result.error = f"Impossible de creer le dossier de sortie ({req.output_dir}) : {e}"
+        return result
     # Defensif : on ne garde que le nom de fichier pour empecher qu'un base_name
     # du type "..\..\x" ne fasse ecrire hors de output_dir.
     base = os.path.join(req.output_dir, os.path.basename(req.base_name))

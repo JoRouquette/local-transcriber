@@ -132,6 +132,15 @@ public sealed class AppConfig
     public int EngineInactivityTimeoutMinutes { get; set; } = 20;
 
     /// <summary>
+    /// Garde-fou memoire : au-dela de cette duree audio, le fichier est refuse d'emblee (avant tout
+    /// chargement complet en RAM) avec un message clair, plutot que de risquer un OOM. Verifie via
+    /// une sonde de duree legere cote moteur. 0 = desactive. Defaut 480 min (8 h) : couvre tout
+    /// enregistrement de reunion normal, ne bloque que les cas pathologiques (fichier corrompu a
+    /// duree aberrante, enregistrement de plusieurs jours laisse ouvert).
+    /// </summary>
+    public int MaxAudioMinutes { get; set; } = 480;
+
+    /// <summary>
     /// Retente automatiquement les fichiers en echec au prochain scan, tant que leur nombre de
     /// tentatives reste sous <see cref="MaxAutoRetries"/>. Desactive par defaut : sinon les echecs
     /// restent en Failed (retraitement manuel via le bouton Retraiter).
@@ -143,6 +152,15 @@ public sealed class AppConfig
 
     // ---- Serveur MCP (HTTP local) et recherche semantique ----
     public int McpPort { get; set; } = 8765;
+
+    /// <summary>
+    /// Exige un jeton d'acces local sur le serveur MCP (en plus de la restriction loopback). Utile
+    /// sur une machine multi-comptes : sans le jeton, un autre utilisateur pourrait interroger le
+    /// MCP sur 127.0.0.1 et lire les transcriptions. Desactive par defaut pour ne pas casser une
+    /// config Claude Desktop existante : quand on l'active, il faut reporter l'URL tokenisee
+    /// (onglet A propos) dans claude_desktop_config.json. Lu au demarrage (redemarrage requis).
+    /// </summary>
+    public bool McpRequireToken { get; set; } = false;
     public bool SemanticEnabled { get; set; } = true;
     public int EmbeddingSidecarPort { get; set; } = 8766;
     public string EmbeddingModel { get; set; } = "intfloat/multilingual-e5-small";

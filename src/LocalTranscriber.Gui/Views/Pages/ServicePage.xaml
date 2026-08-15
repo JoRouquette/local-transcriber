@@ -370,6 +370,58 @@
             </StackPanel>
           </WrapPanel>
 
+          <!-- Actions sur la file : annuler le job en cours, relancer les echecs, debloquer les figes -->
+          <WrapPanel Margin="0,4,0,0">
+            <Button
+              Style="{StaticResource MaterialDesignOutlinedButton}"
+              Command="{Binding CancelCurrentCommand}"
+              ToolTip="Interrompre le traitement en cours"
+              Foreground="#E53935"
+              Margin="0,0,8,4"
+              Padding="8,2"
+              MinHeight="0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon
+                  Kind="StopCircleOutline"
+                  VerticalAlignment="Center"
+                  Margin="0,0,6,0"
+                />
+                <TextBlock Text="Annuler le traitement" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding RetryFailedCommand}"
+              ToolTip="Repasser tous les fichiers en échec en attente pour un nouvel essai"
+              Margin="0,0,8,4"
+              Padding="8,2"
+              MinHeight="0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon Kind="Restart" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <TextBlock Text="Relancer les échecs" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button
+              Style="{StaticResource MaterialDesignFlatButton}"
+              Command="{Binding UnblockStuckCommand}"
+              ToolTip="Remettre en attente les traitements restés bloqués « en cours » (après un arrêt/kill)"
+              Margin="0,0,8,4"
+              Padding="8,2"
+              MinHeight="0"
+            >
+              <StackPanel Orientation="Horizontal">
+                <materialDesign:PackIcon
+                  Kind="LockReset"
+                  VerticalAlignment="Center"
+                  Margin="0,0,6,0"
+                />
+                <TextBlock Text="Débloquer les figés" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </WrapPanel>
+
           <Grid Margin="0,6,0,0">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -433,21 +485,6 @@
                     Margin="0,0,6,0"
                   />
                   <TextBlock Text="Ouvrir le dossier" VerticalAlignment="Center" />
-                </StackPanel>
-              </Button>
-              <Button
-                Style="{StaticResource MaterialDesignFlatButton}"
-                Command="{Binding CancelCurrentCommand}"
-                ToolTip="Interrompre le traitement en cours"
-                Foreground="#E53935"
-              >
-                <StackPanel Orientation="Horizontal">
-                  <materialDesign:PackIcon
-                    Kind="StopCircleOutline"
-                    VerticalAlignment="Center"
-                    Margin="0,0,6,0"
-                  />
-                  <TextBlock Text="Annuler" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
             </WrapPanel>

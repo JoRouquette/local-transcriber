@@ -47,11 +47,25 @@ public sealed class PythonEngineRunner
             };
 
         var reqPath = Path.Combine(Path.GetTempPath(), $"lt-req-{Guid.NewGuid():N}.json");
-        await File.WriteAllTextAsync(
-            reqPath,
-            JsonSerializer.Serialize(request, JsonDefaults.Options),
-            ct
-        );
+        try
+        {
+            await File.WriteAllTextAsync(
+                reqPath,
+                JsonSerializer.Serialize(request, JsonDefaults.Options),
+                ct
+            );
+        }
+        catch (Exception ex)
+        {
+            // Disque plein, %TEMP% inaccessible/verrouille par un antivirus... : on ne laisse pas
+            // l'exception remonter (elle avorterait le job en amont), on renvoie une erreur propre.
+            return new EngineResult
+            {
+                Status = "error",
+                AudioPath = request.AudioPath,
+                Error = $"Impossible d'ecrire la requete moteur ({reqPath}) : {ex.Message}",
+            };
+        }
 
         var psi = new ProcessStartInfo
         {

@@ -106,6 +106,24 @@ def _cosine(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / denom)
 
 
+def _l2(v: np.ndarray) -> np.ndarray:
+    """Normalise un vecteur (norme 1). Averager des embeddings L2-normalises evite que les
+    crops de forte norme dominent la moyenne du cluster."""
+    n = float(np.linalg.norm(v))
+    return v / n if n > 1e-9 else v
+
+
+# Plancher de similarite : meme en appariement 1:1 (ou l'on nomme tout le monde), un score
+# clairement absurde laisse le cluster anonyme plutot que d'y coller un nom faux avec aplomb.
+# Volontairement TRES bas (les scores utiles observes vont de ~0.25 a ~0.6) : ne defait pas
+# le nommage, ne bloque que le grotesque.
+_ASSIGN_FLOOR = 0.10
+
+# Duree minimale d'un extrait pour un embedding fiable. 0.3 s etait trop court (embeddings
+# bruites) : on releve a 1.0 s.
+_MIN_CROP_SECONDS = 1.0
+
+
 class SpeakerIdentifier:
     """Encapsule le modele d'embedding et le catalogue de voix de reference."""
 
@@ -152,14 +170,17 @@ class SpeakerIdentifier:
                 try:
                     self._references[name] = np.asarray(self._inference(_load_wave(path))).reshape(-1)
                     seen.add(name)
-                except Exception:
+                except Exception as e:  # noqa: BLE001
+                    # Coherent avec la boucle .wav : on trace pourquoi une voix de reference n'a
+                    # pas pu etre chargee, au lieu d'un abandon silencieux.
+                    _log(f"[engine] snippet illisible {os.path.basename(path)} : {e}")
                     continue
         return len(self._references)
 
     def _embed_crop(self, file: dict[str, Any], start: float, end: float) -> Optional[np.ndarray]:
         from pyannote.core import Segment
 
-        if end - start < 0.3:  # trop court pour un embedding fiable
+        if end - start < _MIN_CROP_SECONDS:  # trop court pour un embedding fiable
             return None
         try:
             emb = self._inference.crop(file, Segment(start, end))
@@ -188,16 +209,19 @@ class SpeakerIdentifier:
             return result
 
         # Embedding moyen par cluster diarise (on ignore le bucket "SPEAKER_?" = mots non attribues).
+        # Chaque crop est L2-normalise avant moyenne, et on prend jusqu'a 8 extraits les plus longs.
         clusters: dict[str, np.ndarray] = {}
+        durations: dict[str, float] = {}
         for label, spans in speaker_segments.items():
             if label == "SPEAKER_?":
                 continue
-            spans_sorted = sorted(spans, key=lambda s: s[1] - s[0], reverse=True)[:5]
+            durations[label] = sum(e2 - s for s, e2 in spans)
+            spans_sorted = sorted(spans, key=lambda s: s[1] - s[0], reverse=True)[:8]
             embeddings = [
-                e for s, e2 in spans_sorted if (e := self._embed_crop(main, s, e2)) is not None
+                _l2(e) for s, e2 in spans_sorted if (e := self._embed_crop(main, s, e2)) is not None
             ]
             if embeddings:
-                clusters[label] = np.mean(np.vstack(embeddings), axis=0)
+                clusters[label] = _l2(np.mean(np.vstack(embeddings), axis=0))
         if not clusters:
             return result
 
@@ -208,10 +232,15 @@ class SpeakerIdentifier:
             [[_cosine(clusters[lbl], self._references[rn]) for rn in ref_names] for lbl in labels]
         )
 
+        # --- Diagnostic : matrice complete cluster -> (voix=score), pour comprendre les erreurs.
+        for i, lbl in enumerate(labels):
+            parts = ", ".join(f"{ref_names[j]}={scores[i, j]:.2f}" for j in range(len(ref_names)))
+            _log(f"[engine] id-scores {lbl} ({durations.get(lbl, 0.0):.0f}s) : {parts}")
+
         if len(labels) <= len(ref_names):
             # On connait les locuteurs (autant ou moins de clusters que de voix) : appariement
-            # optimal 1:1 (chaque cluster recoit sa voix la plus proche, globalement), SANS seuil
-            # — on nomme tout le monde. Hongrois si scipy dispo, sinon glouton.
+            # optimal 1:1 (chaque cluster recoit sa voix la plus proche, globalement). On nomme
+            # tout le monde SAUF si le meilleur score est sous le plancher (match grotesque).
             try:
                 from scipy.optimize import linear_sum_assignment
 
@@ -231,13 +260,22 @@ class SpeakerIdentifier:
                     taken_lbl.add(i)
                     used.add(j)
             for i, j in pairs:
-                result[labels[i]] = (ref_names[j], float(scores[i, j]))
+                sc = float(scores[i, j])
+                if sc >= _ASSIGN_FLOOR:
+                    result[labels[i]] = (ref_names[j], sc)
+                    _log(f"[engine] id {labels[i]} -> {ref_names[j]} ({sc:.2f})")
+                else:
+                    _log(f"[engine] id {labels[i]} -> ANONYME (meilleur {ref_names[j]} {sc:.2f} < {_ASSIGN_FLOOR})")
         else:
             # Plus de clusters que de voix connues (invite non enrole) : argmax + seuil,
             # les clusters sous le seuil restent anonymes.
             for i, lbl in enumerate(labels):
                 j = int(np.argmax(scores[i]))
-                if scores[i, j] >= threshold:
-                    result[lbl] = (ref_names[j], float(scores[i, j]))
+                sc = float(scores[i, j])
+                if sc >= threshold:
+                    result[lbl] = (ref_names[j], sc)
+                    _log(f"[engine] id {lbl} -> {ref_names[j]} ({sc:.2f})")
+                else:
+                    _log(f"[engine] id {lbl} -> ANONYME (meilleur {ref_names[j]} {sc:.2f} < seuil {threshold:.2f})")
 
         return result

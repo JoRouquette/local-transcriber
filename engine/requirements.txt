@@ -29,10 +29,10 @@ speechbrain==1.1.0
 transformers==4.40.2
 tokenizers==0.19.1
 nltk==3.8.1
-python-dotenv>=1.0.1
-srt>=3.5.3
+python-dotenv==1.0.1
+srt==3.5.3
 numpy==1.26.4
-soundfile>=0.12.1
+soundfile==0.12.1
 
 # setuptools < 80 : fournit `pkg_resources`, dont whisperx a besoin au runtime.
 # `uv venv` n'installe PAS setuptools (contrairement a `python -m venv`), et
@@ -45,4 +45,4 @@ wheel
 sentence-transformers==2.7.0
 
 # Packaging
-pyinstaller>=6.6.0
+pyinstaller==6.6.0

@@ -1,8 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using LocalTranscriber.Core.Security;
 using LocalTranscriber.Gui.Services;
 using MaterialDesignThemes.Wpf;
 
@@ -32,7 +34,26 @@ public sealed partial class AboutViewModel : ObservableObject
 
     public string Version =>
         typeof(AboutViewModel).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
-    public string McpEndpoint => $"http://127.0.0.1:{_settings.Config.McpPort}/mcp";
+
+    /// <summary>
+    /// URL a reporter dans claude_desktop_config.json. Si l'auth MCP est activee
+    /// (McpRequireToken), l'URL inclut le jeton (`?token=...`) — c'est cette URL tokenisee qu'il
+    /// faut utiliser, sinon Claude Desktop recevra 401.
+    /// </summary>
+    public string McpEndpoint
+    {
+        get
+        {
+            var url = $"http://127.0.0.1:{_settings.Config.McpPort}/mcp";
+            if (_settings.Config.McpRequireToken)
+            {
+                var token = AccessToken.Read() ?? AccessToken.GetOrCreate();
+                if (!string.IsNullOrEmpty(token))
+                    url += "?token=" + Uri.EscapeDataString(token);
+            }
+            return url;
+        }
+    }
     public string RepositoryUrl => "https://github.com/JoRouquette/local-transcriber";
 
     // ---- Mises à jour ----
@@ -113,10 +134,23 @@ public sealed partial class AboutViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void InstallUpdate()
+    private async Task InstallUpdate()
     {
-        if (UpdateReady)
-            _updates.ApplyAndRestart();
+        if (!UpdateReady)
+            return;
+        // Action lourde et irreversible (arret du worker jusqu'a 10 s, puis redemarrage) : on
+        // confirme, et on execute hors thread UI pour ne pas figer la fenetre pendant l'arret.
+        var confirm = MessageBox.Show(
+            "Installer la mise à jour et redémarrer maintenant ?\n\n"
+                + "Les modifications non enregistrées seront perdues.",
+            "Mise à jour",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question
+        );
+        if (confirm != MessageBoxResult.Yes)
+            return;
+        _snackbar.Enqueue("Installation de la mise à jour…");
+        await Task.Run(_updates.ApplyAndRestart);
     }
 
     [RelayCommand]

@@ -32,10 +32,23 @@ class EngineRequest:
     chunk_threshold_minutes: int = 20
     chunk_minutes: int = 10
     chunk_min_silence_seconds: float = 0.5
+    # Garde-fou memoire : duree audio max acceptee (min). 0 = desactive.
+    max_audio_minutes: int = 480
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "EngineRequest":
         known = EngineRequest.__dataclass_fields__.keys()  # type: ignore[attr-defined]
+        # Trace les cles ignorees : un drift de contrat .NET <-> Python (champ renomme/retire)
+        # deviendrait sinon invisible (reglages envoyes par le service silencieusement perdus).
+        ignored = set(d) - set(known)
+        if ignored:
+            import sys
+
+            print(
+                f"[engine] cles de requete ignorees (drift de contrat ?) : {sorted(ignored)}",
+                file=sys.stderr,
+                flush=True,
+            )
         return EngineRequest(**{k: v for k, v in d.items() if k in known})
 
 
