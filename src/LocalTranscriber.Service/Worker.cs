@@ -49,6 +49,15 @@ public sealed class Worker : BackgroundService
     // config (sinon le message se repeterait a chaque tick tant que la base reste illisible).
     private DateTime _dbErrorLoggedMtime;
 
+    // Champs LIES AU PROCESSUS : le MCP/Kestrel et les stores les fixent au demarrage. On les
+    // capture au 1er chargement et on empeche leur application a chaud (sinon split-brain :
+    // worker ecrivant/indexant ailleurs que ce que le MCP lit). Un redemarrage est requis.
+    private bool _processScopedCaptured;
+    private string _frozenDataDir = "";
+    private string _frozenOutputRoot = "";
+    private int _frozenMcpPort;
+    private int _frozenSidecarPort;
+
     public Worker(
         ILogger<Worker> logger,
         TranscriptIndex index,
@@ -170,6 +179,42 @@ public sealed class Worker : BackgroundService
 
         _config = ConfigStore.Load(path);
         _configMtime = mtime;
+
+        // Gel des champs lies au processus : au 1er chargement on capture les valeurs de reference
+        // (les memes que celles fixees par le MCP/Kestrel/stores au demarrage) ; ensuite on refuse
+        // de les appliquer a chaud et on force le worker a conserver ces valeurs, pour rester
+        // COHERENT avec le MCP. Un changement n'est effectif qu'apres redemarrage.
+        if (!_processScopedCaptured)
+        {
+            _frozenDataDir = _config.DataDir;
+            _frozenOutputRoot = _config.OutputRoot;
+            _frozenMcpPort = _config.McpPort;
+            _frozenSidecarPort = _config.EmbeddingSidecarPort;
+            _processScopedCaptured = true;
+        }
+        else
+        {
+            if (
+                _config.DataDir != _frozenDataDir
+                || _config.OutputRoot != _frozenOutputRoot
+                || _config.McpPort != _frozenMcpPort
+                || _config.EmbeddingSidecarPort != _frozenSidecarPort
+            )
+            {
+                _logger.LogWarning(
+                    "Changement de dossier de donnees/sortie ou de port MCP/sidecar detecte : sans "
+                        + "effet tant que le service n'a pas redemarre (evite une incoherence "
+                        + "worker/MCP). Redemarrez le worker pour l'appliquer."
+                );
+                _log?.Write(
+                    "[config] dossier/port modifie : redemarrage du worker requis pour l'appliquer."
+                );
+            }
+            _config.DataDir = _frozenDataDir;
+            _config.OutputRoot = _frozenOutputRoot;
+            _config.McpPort = _frozenMcpPort;
+            _config.EmbeddingSidecarPort = _frozenSidecarPort;
+        }
 
         _dataDir = ConfigStore.ExpandPath(_config.DataDir);
         // Ces stores ouvrent une connexion SQLite par operation (using var c = Open()) et ne
