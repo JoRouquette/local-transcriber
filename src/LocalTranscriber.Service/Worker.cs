@@ -595,26 +595,48 @@ public sealed class Worker : BackgroundService
         }
     }
 
+    /// <summary>
+    /// Issue d'une tentative de vectorisation. Distinguer <c>Skipped</c> de
+    /// <c>EmbeddingsUnavailable</c> est essentiel : un JSON non transcriptif (manifeste, config,
+    /// sidecar...) ne doit PAS interrompre la passe -- sinon il affame tous les fichiers situes
+    /// derriere lui dans l'ordre d'enumeration -- alors qu'un sidecar indisponible doit
+    /// l'interrompre immediatement, au lieu de ratisser tout le corpus fichier par fichier.
+    /// </summary>
+    private enum VectorizeOutcome
+    {
+        Indexed,
+        Skipped,
+        EmbeddingsUnavailable,
+    }
+
     private async Task ReconcileVectorsAsync(string outputRoot, int max, CancellationToken ct)
     {
         if (!Directory.Exists(outputRoot))
             return;
-        var done = 0;
+        // Le plafond porte sur les TENTATIVES, pas sur les succes. Avec un compteur de succes, une
+        // indisponibilite des embeddings faisait parcourir la totalite des transcriptions non
+        // vectorisees a CHAQUE tick ; et sidecar fige (TCP accepte, pas de reponse), c'etait 30 s de
+        // timeout par fichier, soit une boucle worker gelee pendant des heures -- donc aucune
+        // transcription lancee pendant ce temps.
+        var attempts = 0;
         foreach (
             var json in Directory.EnumerateFiles(outputRoot, "*.json", SearchOption.AllDirectories)
         )
         {
-            if (done >= max || ct.IsCancellationRequested)
+            if (attempts >= max || ct.IsCancellationRequested)
                 break;
             var mtime = File.GetLastWriteTimeUtc(json).ToString("o");
             if (_vectors.IsUpToDate(json, mtime))
                 continue;
-            if (await VectorizeAsync(json, outputRoot, ct))
-                done++;
+            attempts++;
+            if (
+                await VectorizeAsync(json, outputRoot, ct) == VectorizeOutcome.EmbeddingsUnavailable
+            )
+                break; // on reprendra au prochain tick, sans marteler un sidecar absent
         }
     }
 
-    private async Task<bool> VectorizeAsync(
+    private async Task<VectorizeOutcome> VectorizeAsync(
         string jsonPath,
         string outputRoot,
         CancellationToken ct
@@ -629,8 +651,10 @@ public sealed class Worker : BackgroundService
                 _config.ChunkMaxChars,
                 _config.ChunkOverlapSegments
             );
+            // Pas de contenu exploitable : JSON non transcriptif, ou transcription vide. Rien a
+            // vectoriser, mais surtout : ce n'est pas une panne, la passe doit continuer.
             if (chunks.Count == 0)
-                return false;
+                return VectorizeOutcome.Skipped;
 
             var resp = await _embedder.EmbedAsync(chunks.Select(c => c.Text), "passage", ct);
             if (!resp.IsSuccess || resp.Vectors.Count != chunks.Count)
@@ -640,18 +664,20 @@ public sealed class Worker : BackgroundService
                     jsonPath,
                     resp.Error ?? "compte incoherent"
                 );
-                return false;
+                return VectorizeOutcome.EmbeddingsUnavailable;
             }
 
             var (project, baseName) = DeriveProject(outputRoot, jsonPath);
             var items = chunks.Zip(resp.Vectors, (c, v) => (c, v)).ToList();
             _vectors.ReplaceForPath(jsonPath, project, baseName, mtime, items);
-            return true;
+            return VectorizeOutcome.Indexed;
         }
         catch (Exception ex)
         {
+            // Cause la plus probable : JSON illisible ou partiel (IO, parse). On ne coupe donc pas la
+            // passe -- le plafond de tentatives borne deja le cout si l'erreur se repete.
             _logger.LogWarning(ex, "Vectorisation echouee pour {File}", jsonPath);
-            return false;
+            return VectorizeOutcome.Skipped;
         }
     }
 
