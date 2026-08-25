@@ -30,14 +30,25 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 
 
-def _load_wave(path: str) -> dict[str, Any]:
-    """Charge un fichier audio via ffmpeg (whisperx) en forme d'onde memoire pour pyannote."""
-    import torch
-    import whisperx
+def _wave_from_array(audio: np.ndarray) -> dict[str, Any]:
+    """Emballe une forme d'onde deja decodee (float32 mono 16 kHz) au format attendu par pyannote.
 
-    audio = whisperx.load_audio(path)  # np.float32 mono @ 16 kHz
+    `torch.from_numpy` partage la memoire du tableau numpy : aucune copie.
+    """
+    import torch
+
     waveform = torch.from_numpy(audio).unsqueeze(0)  # (channel=1, time)
     return {"waveform": waveform, "sample_rate": SR}
+
+
+def _load_wave(path: str) -> dict[str, Any]:
+    """Charge un fichier audio via ffmpeg (whisperx) en forme d'onde memoire pour pyannote.
+
+    Reste utilise pour les snippets de voix de reference, qui sont des fichiers a part entiere.
+    """
+    import whisperx
+
+    return _wave_from_array(whisperx.load_audio(path))  # np.float32 mono @ 16 kHz
 
 
 def normalize_voices_dir(voices_dir: str) -> int:
@@ -190,22 +201,24 @@ class SpeakerIdentifier:
 
     def identify(
         self,
-        audio_path: str,
+        audio: "np.ndarray",
         speaker_segments: dict[str, list[tuple[float, float]]],
         threshold: float,
     ) -> dict[str, tuple[str, float]]:
         """Associe chaque label diarise (SPEAKER_xx) a un nom + score.
 
-        Le fichier source est charge une seule fois via ffmpeg (gere le m4a et consorts).
+        `audio` est la forme d'onde DEJA decodee par le pipeline (float32 mono 16 kHz). On la
+        recoit au lieu d'un chemin pour ne pas relancer un decodage ffmpeg complet du fichier
+        source, qui etait deja en memoire (~230 Mo de float32 par heure d'audio).
         """
         result: dict[str, tuple[str, float]] = {}
         if not self._references:
             return result
 
         try:
-            main = _load_wave(audio_path)  # chargement ffmpeg unique (robuste au format)
+            main = _wave_from_array(audio)
         except Exception as e:  # noqa: BLE001
-            _log(f"[engine] identification : audio source illisible : {e}")
+            _log(f"[engine] identification : forme d'onde inexploitable : {e}")
             return result
 
         # Embedding moyen par cluster diarise (on ignore le bucket "SPEAKER_?" = mots non attribues).

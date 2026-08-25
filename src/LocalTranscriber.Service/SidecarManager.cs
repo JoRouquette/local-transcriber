@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace LocalTranscriber.Service;
@@ -74,7 +75,13 @@ public sealed class SidecarManager : IDisposable
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // Encodage fixe explicitement des deux cotes (ici et via PYTHONIOENCODING plus bas) :
+            // sans cela on lisait avec l'encodage console courant et Python ecrivait avec le sien,
+            // ce qui ne coincidait que par accident.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
         psi.ArgumentList.Add("--serve-embeddings");
         psi.ArgumentList.Add("--port");
         psi.ArgumentList.Add(port.ToString());

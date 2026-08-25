@@ -119,7 +119,22 @@ public sealed class AppConfig
     public List<string> FileTypes { get; set; } =
         new() { ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" };
 
+    /// <summary>
+    /// Duree pendant laquelle un fichier doit rester inchange pour etre considere comme
+    /// completement ecrit (et donc traitable). Ne pilote PAS la frequence de scan : voir
+    /// <see cref="ScanIntervalSeconds"/>.
+    /// </summary>
     public int StabilizationSeconds { get; set; } = 5;
+
+    /// <summary>
+    /// Intervalle entre deux passes de la boucle du worker (detection de nouveaux fichiers,
+    /// rafraichissement de l'index, reconciliation des vecteurs). Auparavant confondu avec
+    /// <see cref="StabilizationSeconds"/> : un seul reglage pilotait deux semantiques
+    /// independantes, donc ralentir le scan degradait la detection de fin d'ecriture. Plancher
+    /// applique : 2 s.
+    /// </summary>
+    public int ScanIntervalSeconds { get; set; } = 15;
+
     public int MaxParallelJobs { get; set; } = 1;
 
     /// <summary>

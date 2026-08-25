@@ -3,11 +3,71 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import sys
+import time
 from typing import Any, Optional
 
 from . import __version__, writers
 from .device import resolve_compute_type, resolve_device
 from .models import EngineRequest, EngineResult, SpeakerInfo
+
+
+def _log(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
+
+
+class _Stopwatch:
+    """Chronometre les etapes du pipeline sur stderr.
+
+    Sans cette mesure, tout arbitrage sur le cout des etapes (alignement, batch, moteur
+    resident) se fait a l'aveugle : on ne sait pas ou passe le temps mural. Les lignes
+    produites sont recuperees par le service (EngineLogSink) et visibles dans la GUI.
+    """
+
+    def __init__(self) -> None:
+        self._t0 = time.monotonic()
+        self._last = self._t0
+
+    def mark(self, label: str) -> None:
+        now = time.monotonic()
+        _log(
+            f"[engine] etape {label} : {now - self._last:.1f}s "
+            f"(cumul {now - self._t0:.1f}s)"
+        )
+        self._last = now
+
+
+def _free_memory(device: str) -> None:
+    """Rend effectivement la memoire des modeles liberes (gc + cache CUDA)."""
+    import gc
+
+    gc.collect()
+    if device == "cuda":
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _resolve_cpu_threads(requested: int) -> tuple[int, int]:
+    """Nombre de threads CPU pour l'ASR (CTranslate2), et nombre de processeurs logiques.
+
+    whisperx.load_model a un defaut code en dur de `threads=4`, propage en `cpu_threads` vers
+    CTranslate2 -- et faster-whisper documente qu'une valeur non nulle ECRASE OMP_NUM_THREADS.
+    Sans passer ce parametre, l'ASR (l'etape dominante sur CPU) reste donc a 4 threads quelle
+    que soit la machine, sans aucun moyen de le corriger par l'environnement.
+
+    Auto (0) = moitie des processeurs logiques, avec un plancher a 4 : sur une machine avec
+    hyperthreading cela approche le nombre de coeurs physiques (les GEMM int8 ne gagnent rien a
+    saturer les jumeaux logiques), et le plancher garantit de ne jamais faire PIRE qu'avant.
+    Sur une machine sans hyperthreading, fixer explicitement cpu_threads au nombre de coeurs.
+    """
+    logical = os.cpu_count() or 4
+    if requested and requested > 0:
+        return max(1, requested), logical
+    return max(4, logical // 2), logical
 
 
 def _probe_duration_seconds(path: str) -> Optional[float]:
@@ -116,6 +176,7 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     device = resolve_device(req.device)
     compute_type = resolve_compute_type(req.compute_type, device)
     cache = req.model_cache_dir or None
+    watch = _Stopwatch()
 
     # 1. Transcription
     # Garde-fou memoire : on refuse d'emblee un fichier trop long AVANT de charger tout l'audio
@@ -150,10 +211,20 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
             f"Fichier audio vide ou sans piste exploitable : {os.path.basename(req.audio_path)}."
         )
         return result
+    watch.mark("decodage audio")
     lang = None if req.language == "auto" else req.language
+    cpu_threads, logical_cpus = _resolve_cpu_threads(getattr(req, "cpu_threads", 0) or 0)
+    if device == "cpu":
+        _log(f"[engine] threads ASR : {cpu_threads} (processeurs logiques : {logical_cpus})")
     model = whisperx.load_model(
-        req.model_size, device, compute_type=compute_type, language=lang, download_root=cache
+        req.model_size,
+        device,
+        compute_type=compute_type,
+        language=lang,
+        download_root=cache,
+        threads=cpu_threads,
     )
+    watch.mark(f"chargement modele ASR ({req.model_size}/{compute_type})")
     # Sur CPU, un batch_size eleve consomme beaucoup de RAM (cause de « mkl_malloc: failed to
     # allocate memory ») pour un gain de vitesse faible : on le plafonne. On raccourcit aussi la
     # taille de chunk pour reduire le pic memoire par appel de transcription.
@@ -162,6 +233,12 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     if device == "cpu":
         effective_batch = max(1, min(req.batch_size, 4))
         chunk_target = min(chunk_target, 300.0)  # 5 min max par chunk sur CPU
+        # Ces plafonds ecrasaient les reglages en silence : le batch_size choisi dans la GUI
+        # devenait 4 sans un mot, ce qui rend tout diagnostic de lenteur impossible.
+        if effective_batch != req.batch_size:
+            _log(
+                f"[engine] batch_size {req.batch_size} -> {effective_batch} (plafond CPU memoire)"
+            )
 
     threshold_seconds = float(getattr(req, "chunk_threshold_minutes", 20)) * 60.0
     if getattr(req, "chunking_enabled", False) and duration > threshold_seconds:
@@ -181,6 +258,14 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     else:
         tr = model.transcribe(audio, batch_size=effective_batch, language=lang)
     detected_lang = tr.get("language", req.language)
+    watch.mark("transcription")
+
+    # L'ASR ne sert plus : on libere ses poids (~1,5 Go en int8 pour large-v3) AVANT de charger
+    # le modele d'alignement puis pyannote. Aucune liberation n'existait : les cinq modeles
+    # restaient vivants jusqu'au retour de run(), ce qui est la cause la plus probable des
+    # « mkl_malloc: failed to allocate memory » qui ont motive le plafonnement du batch a 4.
+    del model
+    _free_memory(device)
 
     # 2. Alignement (timestamps au mot)
     try:
@@ -190,33 +275,53 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
         tr = whisperx.align(
             tr["segments"], model_a, metadata, audio, device, return_char_alignments=False
         )
+        del model_a, metadata
+        _free_memory(device)
+        watch.mark("alignement")
     except Exception as e:  # noqa: BLE001
         # L'alignement peut echouer sur certaines langues : on garde les segments bruts, mais on
         # trace (un echec systematique doit rester visible dans les logs, pas muet).
-        import sys as _sys
-
-        print(f"[engine] alignement ignore : {e}", file=_sys.stderr, flush=True)
+        _log(f"[engine] alignement ignore : {e}")
+        # Le modele d'alignement a pu etre charge avant l'echec : on ne le laisse pas en memoire
+        # pendant la diarisation.
+        if "model_a" in locals():
+            del model_a
+        _free_memory(device)
+        watch.mark("alignement (echoue)")
 
     speakers: list[SpeakerInfo] = []
+
+    # Nombre de voix de reference : calcule UNE seule fois, utilise deux fois (indice du nombre
+    # de locuteurs pour pyannote, et decision de charger ou non le modele d'embedding vocal).
+    ref_voice_count = 0
+    if req.speaker_id_enabled and req.voices_dir:
+        from .speaker_id import count_reference_voices
+
+        ref_voice_count = count_reference_voices(req.voices_dir)
 
     # 3. Diarisation
     if req.diarization_enabled:
         min_spk, max_spk = req.min_speakers, req.max_speakers
         # Si aucun nombre n'est fixe et que des voix de reference existent, on deduit le
         # nombre de locuteurs du dossier voices/ (evite la sur-segmentation de pyannote).
-        if min_spk is None and max_spk is None and req.speaker_id_enabled and req.voices_dir:
-            import sys as _sys
-
-            from .speaker_id import count_reference_voices
-
-            k = count_reference_voices(req.voices_dir)
-            if k > 0:
-                min_spk = max_spk = k
-                print(f"[engine] {k} locuteur(s) deduit(s) du dossier voices/", file=_sys.stderr, flush=True)
+        if min_spk is None and max_spk is None and ref_voice_count > 0:
+            min_spk = max_spk = ref_voice_count
+            _log(f"[engine] {ref_voice_count} locuteur(s) deduit(s) du dossier voices/")
 
         diarize = _load_diarization_pipeline(hf_token, device)
         diarize_segments = diarize(audio, min_speakers=min_spk, max_speakers=max_spk)
+        # assign_word_speakers assigne le locuteur au niveau segment PUIS au niveau de chaque mot
+        # (4 operations pandas + un groupby PAR MOT). Or rien en aval ne lit les locuteurs par
+        # mot : _normalize_segments ne conserve que start/end/text/speaker. On retire donc les
+        # mots avant l'appel -- l'assignation par segment, la seule utilisee, reste calculee par
+        # le code de whisperx lui-meme (il ne lit que seg['start'] et seg['end']), donc a
+        # l'identique. Aucune sortie ne change.
+        for seg in tr.get("segments", []):
+            seg.pop("words", None)
         tr = whisperx.assign_word_speakers(diarize_segments, tr)
+        del diarize, diarize_segments
+        _free_memory(device)
+        watch.mark("diarisation")
 
     segments = _normalize_segments(tr.get("segments", []))
     spans = _speaker_spans(segments)
@@ -225,33 +330,36 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     # distinguer une erreur de diarisation (mauvais clusters) d'une erreur d'identification (mauvais
     # nom colle sur un bon cluster) en lisant simplement les logs du traitement.
     if req.diarization_enabled and spans:
-        import sys as _sys
-
         diag = ", ".join(
             f"{lbl}={sum(e - s for s, e in sp):.0f}s"
             for lbl, sp in sorted(spans.items())
         )
-        print(f"[engine] diarisation : {len(spans)} cluster(s) -> {diag}", file=_sys.stderr, flush=True)
+        _log(f"[engine] diarisation : {len(spans)} cluster(s) -> {diag}")
 
     # 4. Identification par snippets de voix (optionnelle)
     id_map: dict[str, tuple[str, float]] = {}
-    if req.speaker_id_enabled and req.voices_dir:
+    # Le constructeur de SpeakerIdentifier charge pyannote/embedding (avec un aller-retour vers
+    # le Hub Hugging Face, qui peut partir en timeout hors ligne). On ne le fait donc que s'il y
+    # a effectivement des voix de reference a comparer -- l'option cochee avec un dossier
+    # voices/ vide est un cas courant : enrolement pas encore fait.
+    if req.speaker_id_enabled and req.voices_dir and ref_voice_count > 0:
         try:
-            import sys
-
             from .speaker_id import SpeakerIdentifier
 
             identifier = SpeakerIdentifier(hf_token, device)
             n = identifier.load_voices(req.voices_dir)
-            print(f"[engine] snippets de voix charges : {n}", file=sys.stderr, flush=True)
+            _log(f"[engine] snippets de voix charges : {n}")
             if n > 0:
-                id_map = identifier.identify(req.audio_path, spans, req.speaker_id_threshold)
-                print(f"[engine] locuteurs identifies : {len(id_map)}/{len(spans)}", file=sys.stderr, flush=True)
+                # La forme d'onde est deja en memoire : la repasser telle quelle evite un SECOND
+                # decodage ffmpeg complet du fichier source (~230 Mo de float32 par heure, plus
+                # le spawn du process).
+                id_map = identifier.identify(audio, spans, req.speaker_id_threshold)
+                _log(f"[engine] locuteurs identifies : {len(id_map)}/{len(spans)}")
+            watch.mark("identification")
         except Exception as e:  # noqa: BLE001
-            import sys as _sys
             import traceback
 
-            print(f"[engine] identification ignoree : {e}", file=_sys.stderr, flush=True)
+            _log(f"[engine] identification ignoree : {e}")
             traceback.print_exc()
             id_map = {}
 
@@ -295,6 +403,7 @@ def run(req: EngineRequest, hf_token: Optional[str]) -> EngineResult:
     if req.output_markdown:
         result.markdown_path = base + ".md"
         writers.write_markdown(result.markdown_path, segments, meta)
+    watch.mark("ecriture des sorties")
 
     result.status = "ok"
     result.duration_seconds = duration
