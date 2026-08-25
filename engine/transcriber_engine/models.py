@@ -34,6 +34,9 @@ class EngineRequest:
     chunk_min_silence_seconds: float = 0.5
     # Garde-fou memoire : duree audio max acceptee (min). 0 = desactive.
     max_audio_minutes: int = 480
+    # Threads CPU pour l'ASR (CTranslate2). 0 = auto (voir pipeline._resolve_cpu_threads).
+    # A fixer explicitement au nombre de coeurs sur une machine sans hyperthreading.
+    cpu_threads: int = 0
 
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "EngineRequest":
