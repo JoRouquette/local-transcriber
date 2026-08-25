@@ -14,6 +14,13 @@ namespace LocalTranscriber.Core.Engine;
 /// </summary>
 public sealed class PythonEngineRunner
 {
+    /// <summary>
+    /// Attente maximale du drainage de stdout/stderr apres la sortie du process moteur. En regime
+    /// normal le drainage est quasi instantane ; ce plafond n'existe que pour ne pas figer la file
+    /// quand un sous-process orphelin retient les handles (voir <see cref="RunAsync"/>).
+    /// </summary>
+    private static readonly TimeSpan StreamDrainTimeout = TimeSpan.FromSeconds(10);
+
     private readonly string _enginePath;
     private readonly string? _hfToken;
     private readonly ILogger _logger;
@@ -183,7 +190,36 @@ public sealed class PythonEngineRunner
             }
             // On attend le drainage complet des deux flux avant de lire les buffers : les handlers
             // peuvent encore avoir des lignes en attente au moment ou le process se termine.
-            await Task.WhenAll(stdoutDone.Task, stderrDone.Task);
+            //
+            // MAIS cette attente doit etre bornee : les sentinelles (e.Data == null) n'arrivent qu'a
+            // la fermeture des handles stdout/stderr, et un sous-process Python orphelin (worker
+            // dataloader, ffmpeg) peut les retenir alors que le process parent est deja sorti. Sans
+            // timeout on figerait la file indefiniment, et sans garde-fou : le watchdog vient d'etre
+            // annule juste au-dessus. A noter : tuer ne sert a rien ici (le parent est sorti, l'enfant
+            // est reparente et n'est plus joignable via `proc`) -- la seule sortie est d'arreter
+            // d'attendre et d'exploiter ce qui a deja ete recu (le JSON de resultat est flushe par le
+            // moteur avant sa sortie, donc le job aboutit dans la plupart des cas).
+            try
+            {
+                await Task.WhenAll(stdoutDone.Task, stderrDone.Task)
+                    .WaitAsync(StreamDrainTimeout, ct);
+            }
+            catch (TimeoutException)
+            {
+                _logger.LogWarning(
+                    "[engine] flux non draines apres {Seconds}s (sous-process orphelin ?) : on exploite la sortie deja recue.",
+                    StreamDrainTimeout.TotalSeconds
+                );
+                try
+                {
+                    proc.CancelOutputRead();
+                    proc.CancelErrorRead();
+                }
+                catch
+                { /* best effort : la lecture asynchrone peut deja etre terminee */
+                }
+                KillTree(proc); // no-op si le parent est deja sorti, utile s'il vit encore
+            }
 
             string raw;
             lock (bufferLock)
