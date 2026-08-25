@@ -86,6 +86,16 @@ public sealed class PythonEngineRunner
         };
         psi.ArgumentList.Add("--request");
         psi.ArgumentList.Add(reqPath);
+        // On LIT les flux en UTF-8 (StandardOutput/ErrorEncoding ci-dessus) : il faut donc
+        // imposer a Python d'y ECRIRE en UTF-8. Sans cela il utilise l'encodage console de
+        // Windows (cp1252 en France), et deux choses cassent : les caracteres representables en
+        // cp1252 (c cedille, points de suspension) sortent en octets invalides en UTF-8 et
+        // s'affichent en caractere de remplacement ; ceux qui n'existent pas en cp1252 (la
+        // fleche U+2192 des logs de chunking) sortent en texte litteral "→" via
+        // backslashreplace. Cela ne touchait pas que les logs : le resultat moteur est
+        // serialise avec ensure_ascii=False, donc les messages d'erreur et les noms de
+        // locuteurs accentues arrivaient corrompus jusqu'a la GUI.
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
         if (!string.IsNullOrWhiteSpace(_hfToken))
             psi.Environment["HF_TOKEN"] = _hfToken;
 
