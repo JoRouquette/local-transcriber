@@ -87,15 +87,24 @@ def chunked_transcribe(
         log(f"[engine] découpage en {len(ranges)} chunk(s) (par silence)")
     all_segments: list[dict[str, Any]] = []
     detected = language
+    # Langue effectivement transmise aux chunks. En "auto" (language=None), whisperx relancait une
+    # detection de langue sur les 30 premieres secondes de CHAQUE chunk (passe d'encodeur +
+    # reconstruction du tokenizer, car il remet self.tokenizer a None quand aucune langue n'est
+    # imposee). Pire : un chunk bruite pouvait etre detecte dans une autre langue et transcrit de
+    # travers, sans aucune trace. On fige donc la langue des que le premier chunk l'a etablie.
+    lang_for_chunk = language
     for idx, (start, end) in enumerate(ranges):
         if end <= start:
             continue
         offset = start / float(sr)
         if log:
             log(f"[engine] chunk {idx + 1}/{len(ranges)} : {offset:.0f}s → {end / float(sr):.0f}s")
-        sub_tr = model.transcribe(audio[start:end], batch_size=batch_size, language=language)
-        if detected is None:
-            detected = sub_tr.get("language")
+        sub_tr = model.transcribe(audio[start:end], batch_size=batch_size, language=lang_for_chunk)
+        if lang_for_chunk is None:
+            lang_for_chunk = sub_tr.get("language")
+            detected = lang_for_chunk
+            if log and lang_for_chunk:
+                log(f"[engine] langue detectee : {lang_for_chunk} (figee pour les chunks suivants)")
         for seg in sub_tr.get("segments", []):
             seg = dict(seg)
             # `or 0.0` : tolere un start/end absent OU None (whisperx peut renvoyer None sur un
