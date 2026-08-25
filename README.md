@@ -109,7 +109,7 @@ Ouvrez **LocalTranscriber** (la GUI) :
 
 ### Surveillance du dossier
 
-Le service **sonde** le dossier toutes les `stabilization_seconds` (5 s par défaut) : scan récursif, détection des fichiers **stables** (non modifiés depuis ce délai, non verrouillés), **empreinte de contenu** pour ne jamais retranscrire deux fois le même fichier. Les fichiers déjà vus et inchangés ne sont pas re-hachés (économie CPU). Pendant les **heures d'inactivité**, la détection/mise en file continue mais aucune transcription n'est lancée.
+Le service **sonde** le dossier toutes les `scan_interval_seconds` (15 s par défaut) : scan récursif, détection des fichiers **stables** — non modifiés depuis `stabilization_seconds` (5 s par défaut), non verrouillés —, **empreinte de contenu** pour ne jamais retranscrire deux fois le même fichier. Les fichiers déjà vus et inchangés ne sont pas re-hachés (économie CPU). Pendant les **heures d'inactivité**, la détection/mise en file continue mais aucune transcription n'est lancée.
 
 **Enregistrer** écrit `config.json` dans `%PROGRAMDATA%\LocalTranscriber\` ; le service le recharge automatiquement.
 

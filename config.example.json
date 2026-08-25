@@ -10,6 +10,8 @@
   "hf_token": "",
   "file_types": [ ".wav", ".mp3", ".m4a", ".flac", ".ogg", ".opus", ".wma", ".aac" ],
   "stabilization_seconds": 5,
+  "_comment_scan_interval": "Frequence de la boucle du worker (detection, index, vecteurs). Distinct de stabilization_seconds, qui est le delai d'immobilite requis pour considerer un fichier comme completement ecrit.",
+  "scan_interval_seconds": 15,
   "max_parallel_jobs": 1,
   "engine_inactivity_timeout_minutes": 20,
   "max_audio_minutes": 480,

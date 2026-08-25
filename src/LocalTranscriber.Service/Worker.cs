@@ -159,7 +159,7 @@ public sealed class Worker : BackgroundService
             }
 
             await Task.Delay(
-                TimeSpan.FromSeconds(Math.Max(2, _config.StabilizationSeconds)),
+                TimeSpan.FromSeconds(Math.Max(2, _config.ScanIntervalSeconds)),
                 stoppingToken
             );
         }
